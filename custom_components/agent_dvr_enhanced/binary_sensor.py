@@ -36,6 +36,9 @@ async def async_setup_entry(
             sensors.append(
                 AgentDVRAlertSensor(coordinator, entry, device_data)
             )
+            sensors.append(
+                AgentDVRRecordingSensor(coordinator, entry, device_data)
+            )
 
     async_add_entities(sensors)
 
@@ -132,3 +135,29 @@ class AgentDVRAlertSensor(_AgentDVRBinarySensor):
             return mqtt_val
         device = self._get_current_device()
         return device.get("data", {}).get("alerted", False)
+
+
+class AgentDVRRecordingSensor(_AgentDVRBinarySensor):
+    """Binary sensor that turns on when the camera is recording."""
+
+    _attr_device_class = BinarySensorDeviceClass.RUNNING
+    _attr_name = "Recording"
+
+    def __init__(
+        self,
+        coordinator: AgentDVRCoordinator,
+        entry: ConfigEntry,
+        device_data: dict[str, Any],
+    ) -> None:
+        """Initialize the recording sensor."""
+        super().__init__(coordinator, entry, device_data, "recording")
+
+    @property
+    def is_on(self) -> bool:
+        """Return True when the camera is recording."""
+        # Check MQTT instant state first
+        mqtt_val = self.coordinator.get_device_state(self._oid, "recording")
+        if mqtt_val is not False:
+            return mqtt_val
+        device = self._get_current_device()
+        return device.get("data", {}).get("recording", False)
