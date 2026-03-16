@@ -268,11 +268,6 @@ class AgentDVRCard extends HTMLElement {
           overflow: hidden;
           color: var(--primary-text-color);
         }
-        .header {
-          padding: 16px 16px 0 16px;
-          font-size: 1.1em;
-          font-weight: 500;
-        }
         .tabs {
           display: flex;
           border-bottom: 1px solid var(--divider-color, #e0e0e0);
@@ -377,7 +372,6 @@ class AgentDVRCard extends HTMLElement {
       </style>
 
       <div class="card">
-        <div class="header">${this._escHtml(name)} <span style="font-size:0.6em;color:var(--secondary-text-color)">v1.7.1</span></div>
         <div class="tabs">
           <div class="tab ${this._activeTab === "live" ? "active" : ""}" data-tab="live">
             <svg viewBox="0 0 24 24"><path d="M17 10.5V7c0-.55-.45-1-1-1H4c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h12c.55 0 1-.45 1-1v-3.5l4 4v-11l-4 4z"/></svg>
