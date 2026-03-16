@@ -182,19 +182,35 @@ class AgentDVRCard extends HTMLElement {
         this._render();
     }
 
-    _formatTime(timestamp) {
-        if (!timestamp) return "";
-        try {
-            let d;
-            if (typeof timestamp === "number") {
-                d = new Date(timestamp > 1e12 ? timestamp : timestamp * 1000);
+    _parseTimestamp(timestamp) {
+        if (!timestamp && timestamp !== 0) return null;
+        let ms;
+        // .NET JSON date format: /Date(1234567890000)/
+        if (typeof timestamp === "string") {
+            const dotnetMatch = timestamp.match(/\/Date\(([-+]?\d+)\)\//);
+            if (dotnetMatch) {
+                ms = parseInt(dotnetMatch[1], 10);
+            } else if (/^\d+$/.test(timestamp.trim())) {
+                // Numeric string
+                const num = parseInt(timestamp.trim(), 10);
+                ms = num > 1e12 ? num : num * 1000;
             } else {
-                d = new Date(timestamp);
+                // ISO 8601 or other parseable string
+                ms = new Date(timestamp).getTime();
             }
-            return d.toLocaleString();
-        } catch {
-            return String(timestamp);
+        } else if (typeof timestamp === "number") {
+            ms = timestamp > 1e12 ? timestamp : timestamp * 1000;
+        } else {
+            return null;
         }
+        if (isNaN(ms)) return null;
+        return new Date(ms);
+    }
+
+    _formatTime(timestamp) {
+        if (!timestamp && timestamp !== 0) return "";
+        const d = this._parseTimestamp(timestamp);
+        return d ? d.toLocaleString() : String(timestamp);
     }
 
     _formatDuration(dur) {
@@ -573,6 +589,11 @@ class AgentDVRCard extends HTMLElement {
             return '<div class="empty">No recordings found</div>';
         }
 
+        // Debug: show raw event structure
+        const debugInfo = this._recordings.length > 0
+            ? `<div style="padding:8px 16px;font-size:0.75em;color:var(--secondary-text-color);background:var(--secondary-background-color);overflow-x:auto;white-space:pre-wrap;max-height:150px;overflow-y:auto;"><strong>Debug (first event keys):</strong>\n${this._escHtml(JSON.stringify(this._recordings[0], null, 2))}</div>`
+            : "";
+
         const info = this._getEntryInfo();
         const entryId = info ? info.entryId : "";
         const oid = info ? info.oid : "";
@@ -639,8 +660,10 @@ class AgentDVRCard extends HTMLElement {
 
         // Sort newest first
         events.sort((a, b) => {
-            const ta = typeof a.timestamp === "number" ? a.timestamp : new Date(a.timestamp).getTime();
-            const tb = typeof b.timestamp === "number" ? b.timestamp : new Date(b.timestamp).getTime();
+            const da = this._parseTimestamp(a.timestamp);
+            const db = this._parseTimestamp(b.timestamp);
+            const ta = da ? da.getTime() : 0;
+            const tb = db ? db.getTime() : 0;
             return tb - ta;
         });
 
@@ -648,18 +671,16 @@ class AgentDVRCard extends HTMLElement {
             return '<div class="empty">No events found</div>';
         }
 
+        // Debug: show raw timestamp from first event
+        const debugTs = events.length > 0
+            ? `<div style="padding:8px 16px;font-size:0.75em;color:var(--secondary-text-color);background:var(--secondary-background-color);overflow-x:auto;white-space:pre-wrap;max-height:150px;overflow-y:auto;"><strong>Debug (first event):</strong> timestamp=${this._escHtml(JSON.stringify(events[0].timestamp))}, type=${this._escHtml(typeof events[0].timestamp)}</div>`
+            : "";
+
         // Group by date
         const groups = {};
         for (const ev of events) {
-            let d;
-            try {
-                const ts = typeof ev.timestamp === "number"
-                    ? (ev.timestamp > 1e12 ? ev.timestamp : ev.timestamp * 1000)
-                    : new Date(ev.timestamp).getTime();
-                d = new Date(ts);
-            } catch {
-                continue;
-            }
+            const d = this._parseTimestamp(ev.timestamp);
+            if (!d) continue;
             const key = d.toLocaleDateString(undefined, {
                 weekday: "long",
                 year: "numeric",
@@ -694,7 +715,7 @@ class AgentDVRCard extends HTMLElement {
             html += `</div></div>`;
         }
 
-        return `<div class="timeline">${html}</div>`;
+        return `${debugTs}<div class="timeline">${html}</div>`;
     }
 
     _escHtml(str) {
