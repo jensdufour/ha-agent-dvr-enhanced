@@ -172,16 +172,14 @@ class AgentDVREventsApiView(HomeAssistantView):
         try:
             events = await coordinator.client.get_events(oid=oid_int, ot=ot_int)
         except Exception:
-            _LOGGER.exception("Error fetching events")
+            _LOGGER.exception("Error fetching events for oid=%s ot=%s", oid, ot)
             return web.Response(status=502, text="Error fetching events")
 
-        if events:
-            _LOGGER.debug(
-                "Events API: %d events, first event keys=%s, first event=%s",
-                len(events),
-                list(events[0].keys()) if isinstance(events[0], dict) else type(events[0]),
-                events[0],
-            )
+        _LOGGER.info(
+            "Events API: oid=%s ot=%s returned %d event(s)%s",
+            oid, ot, len(events),
+            f", first keys={list(events[0].keys())}" if events and isinstance(events[0], dict) else "",
+        )
 
         return web.json_response(events)
 
