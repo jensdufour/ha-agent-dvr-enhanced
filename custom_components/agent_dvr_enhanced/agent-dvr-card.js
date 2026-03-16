@@ -1,6 +1,6 @@
 /**
  * Agent DVR Card - Custom Lovelace card for Agent DVR Enhanced
- * Version: 1.2.0
+ * Version: 1.3.0
  * Provides Live, Timeline, and Recordings views.
  */
 
@@ -86,9 +86,9 @@ class AgentDVRCard extends HTMLElement {
     async _switchTab(tab) {
         this._activeTab = tab;
         this._playingRecording = null;
-        this._render();
 
         if (tab === "live") {
+            this._render();
             this._updateCameraImage();
             this._startLiveRefresh();
         } else {
@@ -97,15 +97,15 @@ class AgentDVRCard extends HTMLElement {
 
         await this._resolveEntryId();
 
-        if (tab === "recordings" && this._recordings.length === 0) {
-            this._fetchRecordings();
+        if (tab === "recordings") {
+            await this._fetchRecordings();
         }
         if (tab === "timeline") {
+            await this._fetchRecordings();
             this._fetchAlerts();
-            if (this._recordings.length === 0) {
-                this._fetchRecordings();
-            }
         }
+
+        this._render();
     }
 
     _startLiveRefresh() {
@@ -522,7 +522,7 @@ class AgentDVRCard extends HTMLElement {
       </style>
 
       <div class="card">
-        <div class="header">${this._escHtml(name)} <span style="font-size:0.6em;color:var(--secondary-text-color)">v1.2.0</span></div>
+        <div class="header">${this._escHtml(name)} <span style="font-size:0.6em;color:var(--secondary-text-color)">v1.3.0</span></div>
         <div class="tabs">
           <div class="tab ${this._activeTab === "live" ? "active" : ""}" data-tab="live">
             <svg viewBox="0 0 24 24"><path d="M17 10.5V7c0-.55-.45-1-1-1H4c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h12c.55 0 1-.45 1-1v-3.5l4 4v-11l-4 4z"/></svg>
@@ -641,11 +641,6 @@ class AgentDVRCard extends HTMLElement {
             return '<div class="empty">No recordings found</div>';
         }
 
-        // Debug: show raw event structure
-        const debugInfo = this._recordings.length > 0
-            ? `<div style="padding:8px 16px;font-size:0.75em;color:var(--secondary-text-color);background:var(--secondary-background-color);overflow-x:auto;white-space:pre-wrap;max-height:150px;overflow-y:auto;"><strong>Debug (first event keys):</strong>\n${this._escHtml(JSON.stringify(this._recordings[0], null, 2))}</div>`
-            : "";
-
         const info = this._getEntryInfo();
         const entryId = info ? info.entryId : "";
         const oid = info ? info.oid : "";
@@ -743,7 +738,7 @@ class AgentDVRCard extends HTMLElement {
             const extracted = this._extractTimestamp(debugRec);
             const parsed = this._parseTimestamp(extracted);
             debugTs = `<div style="padding:8px 16px;font-size:0.75em;color:var(--secondary-text-color);background:var(--secondary-background-color);overflow-x:auto;white-space:pre-wrap;max-height:250px;overflow-y:auto;">` +
-                `<strong>v1.2.0 | Fields (${keys.length}):</strong>\\n${this._escHtml(fieldInfo)}\\n\\n` +
+                `<strong>v1.3.0 | Fields (${keys.length}):</strong>\\n${this._escHtml(fieldInfo)}\\n\\n` +
                 `<strong>Extracted:</strong> ${this._escHtml(JSON.stringify(extracted))}\\n` +
                 `<strong>Parsed:</strong> ${this._escHtml(String(parsed))}</div>`;
         }
