@@ -1,6 +1,6 @@
 /**
  * Agent DVR Card - Custom Lovelace card for Agent DVR Enhanced
- * Version: 1.3.0
+ * Version: 1.4.0
  * Provides Live, Timeline, and Recordings views.
  */
 
@@ -522,7 +522,7 @@ class AgentDVRCard extends HTMLElement {
       </style>
 
       <div class="card">
-        <div class="header">${this._escHtml(name)} <span style="font-size:0.6em;color:var(--secondary-text-color)">v1.3.0</span></div>
+        <div class="header">${this._escHtml(name)} <span style="font-size:0.6em;color:var(--secondary-text-color)">v1.4.0</span></div>
         <div class="tabs">
           <div class="tab ${this._activeTab === "live" ? "active" : ""}" data-tab="live">
             <svg viewBox="0 0 24 24"><path d="M17 10.5V7c0-.55-.45-1-1-1H4c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h12c.55 0 1-.45 1-1v-3.5l4 4v-11l-4 4z"/></svg>
@@ -550,31 +550,38 @@ class AgentDVRCard extends HTMLElement {
             });
         });
 
-        // Attach recording item click handlers
-        this.shadowRoot.querySelectorAll(".rec-item").forEach((item) => {
-            item.addEventListener("click", () => {
-                const idx = parseInt(item.dataset.idx, 10);
-                if (!isNaN(idx) && this._recordings[idx]) {
-                    this._playRecording(this._recordings[idx]);
+        // Use event delegation on content for all clickable items
+        const content = this.shadowRoot.querySelector("#content");
+        if (content) {
+            content.addEventListener("click", (e) => {
+                // Recording item click
+                const recItem = e.target.closest(".rec-item");
+                if (recItem) {
+                    const idx = parseInt(recItem.dataset.idx, 10);
+                    if (!isNaN(idx) && this._recordings[idx]) {
+                        this._playRecording(this._recordings[idx]);
+                    }
+                    return;
+                }
+
+                // Timeline event click
+                const tlEvent = e.target.closest(".timeline-event");
+                if (tlEvent && tlEvent.dataset.idx !== undefined) {
+                    const idx = parseInt(tlEvent.dataset.idx, 10);
+                    if (!isNaN(idx) && this._recordings[idx]) {
+                        this._activeTab = "recordings";
+                        this._playRecording(this._recordings[idx]);
+                    }
+                    return;
+                }
+
+                // Player close click
+                const closeBtn = e.target.closest(".player-close");
+                if (closeBtn) {
+                    this._stopPlayback();
+                    return;
                 }
             });
-        });
-
-        // Attach timeline event click handlers
-        this.shadowRoot.querySelectorAll(".timeline-event").forEach((item) => {
-            item.addEventListener("click", () => {
-                const idx = parseInt(item.dataset.idx, 10);
-                if (!isNaN(idx) && this._recordings[idx]) {
-                    this._activeTab = "recordings";
-                    this._playRecording(this._recordings[idx]);
-                }
-            });
-        });
-
-        // Close button
-        const closeBtn = this.shadowRoot.querySelector(".player-close");
-        if (closeBtn) {
-            closeBtn.addEventListener("click", () => this._stopPlayback());
         }
 
         // Start live refresh if on live tab
@@ -648,17 +655,17 @@ class AgentDVRCard extends HTMLElement {
         const items = this._recordings.map((rec, idx) => {
             const fn = rec.fn || rec.filename || "";
             const thumbBase = fn.replace(/\.[^.]+$/, "");
-            const thumbUrl = `/api/agent_dvr_enhanced/thumbnail/${entryId}/${oid}/${thumbBase}.jpg`;
+            const thumbUrl = fn ? `/api/agent_dvr_enhanced/thumbnail/${entryId}/${oid}/${thumbBase}.jpg` : "";
             const time = this._formatTime(this._extractTimestamp(rec));
             const dur = this._formatDuration(rec.duration || rec.dur || rec.d);
             const tags = rec.tags || rec.tag || "";
+            const title = time || fn || `Recording ${idx + 1}`;
 
             return `
         <div class="rec-item" data-idx="${idx}">
-          <img class="rec-thumb" src="${thumbUrl}" alt="" loading="lazy"
-               onerror="this.style.background='#333'" />
+          ${thumbUrl ? `<img class="rec-thumb" src="${thumbUrl}" alt="" loading="lazy" onerror="this.style.background='#333'" />` : `<div class="rec-thumb" style="background:#333"></div>`}
           <div class="rec-info">
-            <div class="rec-title">${this._escHtml(time || fn)}</div>
+            <div class="rec-title">${this._escHtml(title)}</div>
             <div class="rec-meta">
               ${dur ? dur : ""}
               ${tags ? `<span class="rec-tags">${this._escHtml(tags)}</span>` : ""}
@@ -668,7 +675,9 @@ class AgentDVRCard extends HTMLElement {
       `;
         });
 
-        return `<div class="recordings-list">${items.join("")}</div>`;
+        const debugLine = `<div style="padding:4px 16px;font-size:0.7em;color:var(--secondary-text-color);">${this._recordings.length} recording(s) | entryId: ${entryId ? "ok" : "missing"} | oid: ${oid || "?"}</div>`;
+
+        return `${debugLine}<div class="recordings-list">${items.join("")}</div>`;
     }
 
     _safeDateStr(d, method, options) {
@@ -738,7 +747,7 @@ class AgentDVRCard extends HTMLElement {
             const extracted = this._extractTimestamp(debugRec);
             const parsed = this._parseTimestamp(extracted);
             debugTs = `<div style="padding:8px 16px;font-size:0.75em;color:var(--secondary-text-color);background:var(--secondary-background-color);overflow-x:auto;white-space:pre-wrap;max-height:250px;overflow-y:auto;">` +
-                `<strong>v1.3.0 | Fields (${keys.length}):</strong>\\n${this._escHtml(fieldInfo)}\\n\\n` +
+                `<strong>v1.4.0 | Fields (${keys.length}):</strong>\\n${this._escHtml(fieldInfo)}\\n\\n` +
                 `<strong>Extracted:</strong> ${this._escHtml(JSON.stringify(extracted))}\\n` +
                 `<strong>Parsed:</strong> ${this._escHtml(String(parsed))}</div>`;
         }
