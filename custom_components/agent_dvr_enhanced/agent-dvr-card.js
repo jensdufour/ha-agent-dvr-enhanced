@@ -369,7 +369,7 @@ class AgentDVRCard extends HTMLElement {
       </style>
 
       <div class="card">
-        <div class="header">${this._escHtml(name)} <span style="font-size:0.6em;color:var(--secondary-text-color)">v1.5.2</span></div>
+        <div class="header">${this._escHtml(name)} <span style="font-size:0.6em;color:var(--secondary-text-color)">v1.5.3</span></div>
         <div class="tabs">
           <div class="tab ${this._activeTab === "live" ? "active" : ""}" data-tab="live">
             <svg viewBox="0 0 24 24"><path d="M17 10.5V7c0-.55-.45-1-1-1H4c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h12c.55 0 1-.45 1-1v-3.5l4 4v-11l-4 4z"/></svg>
@@ -392,7 +392,7 @@ class AgentDVRCard extends HTMLElement {
 
         const content = this.shadowRoot.querySelector("#content");
         if (content) {
-            content.addEventListener("click", (e) => {
+            content.addEventListener("click", async (e) => {
                 const item = e.target.closest(".tl-item");
                 if (item) {
                     const idx = parseInt(item.dataset.idx, 10);
@@ -405,6 +405,29 @@ class AgentDVRCard extends HTMLElement {
                 if (closeBtn) {
                     this._stopPlayback();
                     return;
+                }
+                if (e.target.id === "debug-btn") {
+                    const info = this._getEntryInfo();
+                    if (!info || !info.entryId) return;
+                    e.target.textContent = "Running...";
+                    e.target.disabled = true;
+                    try {
+                        const resp = await this._hass.callApi("GET",
+                            `agent_dvr_enhanced/debug/${info.entryId}/${info.oid}/${info.ot}`);
+                        const out = this.shadowRoot.querySelector("#debug-output");
+                        if (out) {
+                            out.style.display = "block";
+                            out.textContent = JSON.stringify(resp, null, 2);
+                        }
+                    } catch (err) {
+                        const out = this.shadowRoot.querySelector("#debug-output");
+                        if (out) {
+                            out.style.display = "block";
+                            out.textContent = "Error: " + (err.message || err);
+                        }
+                    }
+                    e.target.textContent = "Run API Diagnostics";
+                    e.target.disabled = false;
                 }
             });
         }
@@ -461,9 +484,10 @@ class AgentDVRCard extends HTMLElement {
             return `<div class="empty" style="flex-direction:column;gap:8px;text-align:center;padding:16px">
               <div>No recordings found</div>
               <div style="font-size:0.7em;color:var(--secondary-text-color);word-break:break-all">
-                entryId: ${info2?.entryId || 'missing'} | oid: ${info2?.oid ?? 'missing'} | ot: ${info2?.ot ?? 'missing'}<br>
-                URL: /api/agent_dvr_enhanced/events/${info2?.entryId || '?'}/${info2?.oid ?? '?'}/${info2?.ot ?? '?'}
+                entryId: ${info2?.entryId || 'missing'} | oid: ${info2?.oid ?? 'missing'} | ot: ${info2?.ot ?? 'missing'}
               </div>
+              <button id="debug-btn" style="margin-top:8px;padding:6px 16px;cursor:pointer;border-radius:6px;border:1px solid var(--divider-color);background:var(--secondary-background-color)">Run API Diagnostics</button>
+              <pre id="debug-output" style="font-size:0.65em;text-align:left;max-height:400px;overflow:auto;white-space:pre-wrap;word-break:break-all;display:none;padding:8px;background:var(--secondary-background-color);border-radius:4px"></pre>
             </div>`;
         }
 

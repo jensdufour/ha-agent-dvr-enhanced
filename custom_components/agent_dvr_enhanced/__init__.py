@@ -264,27 +264,68 @@ class AgentDVRDebugApiView(HomeAssistantView):
             return web.json_response({"error": "Invalid parameters"}, status=400)
 
         coordinator: AgentDVRCoordinator = hass.data[DOMAIN][entry_id]
-        result = {}
+        result = {"oid": oid_int, "ot": ot_int}
+
+        # Try multiple Agent DVR API paths to find recordings
+        api_paths = [
+            f"q/getEvents?oid={oid_int}&ot={ot_int}",
+            f"q/getEvents?oid={oid_int}",
+            "q/getEvents",
+            f"command.cgi?cmd=getEvents&oid={oid_int}&ot={ot_int}",
+            f"command.cgi?cmd=getEvents&oid={oid_int}",
+            f"api/Journal?oid={oid_int}&ot={ot_int}",
+            f"api/Journal?oid={oid_int}",
+            f"command.cgi?cmd=getTimeline&oid={oid_int}&ot={ot_int}",
+            f"command.cgi?cmd=getTimeline&oid={oid_int}",
+            f"command.cgi?cmd=getMediaList&oid={oid_int}&ot={ot_int}",
+            f"command.cgi?cmd=getMediaList&oid={oid_int}",
+        ]
+
+        probes = {}
+        for path in api_paths:
+            try:
+                data = await coordinator.client._request_json(path)
+                count = None
+                data_type = type(data).__name__
+                sample = None
+                if isinstance(data, list):
+                    count = len(data)
+                    if data and isinstance(data[0], dict):
+                        sample = list(data[0].keys())
+                elif isinstance(data, dict):
+                    # Check for nested lists
+                    for key, val in data.items():
+                        if isinstance(val, list):
+                            count = len(val)
+                            if val and isinstance(val[0], dict):
+                                sample = list(val[0].keys())
+                            break
+                probes[path] = {
+                    "type": data_type,
+                    "count": count,
+                    "sample_keys": sample,
+                    "raw_preview": str(data)[:300],
+                }
+            except Exception as exc:
+                probes[path] = {"error": str(exc)}
+
+        result["probes"] = probes
+
+        # Also get the server version and objects summary
+        try:
+            status = await coordinator.client.get_status()
+            result["server_version"] = status.get("version", "unknown")
+        except Exception as exc:
+            result["server_version_error"] = str(exc)
 
         try:
-            events_raw = await coordinator.client._request_json(
-                f"q/getEvents?oid={oid_int}&ot={ot_int}"
-            )
-            result["events_raw"] = events_raw
-            result["events_type"] = type(events_raw).__name__
-            if isinstance(events_raw, list):
-                result["events_count"] = len(events_raw)
-                if events_raw:
-                    result["events_first"] = events_raw[0]
-                    result["events_keys"] = list(events_raw[0].keys()) if isinstance(events_raw[0], dict) else None
+            objs = await coordinator.client.get_objects()
+            devices = objs.get("objectList", [])
+            result["devices"] = [
+                {"id": d.get("id"), "typeID": d.get("typeID"), "name": d.get("name")}
+                for d in devices
+            ]
         except Exception as exc:
-            result["events_error"] = str(exc)
-
-        try:
-            alerts_raw = await coordinator.client._request_json("alerts.json")
-            result["alerts_raw"] = alerts_raw
-            result["alerts_type"] = type(alerts_raw).__name__
-        except Exception as exc:
-            result["alerts_error"] = str(exc)
+            result["devices_error"] = str(exc)
 
         return web.json_response(result)
