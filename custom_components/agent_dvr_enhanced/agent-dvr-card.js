@@ -195,8 +195,16 @@ class AgentDVRCard extends HTMLElement {
                 const num = parseInt(timestamp.trim(), 10);
                 ms = num > 1e12 ? num : num * 1000;
             } else {
-                // ISO 8601 or other parseable string
+                // Try ISO 8601 or other parseable string
                 ms = new Date(timestamp).getTime();
+                // Fallback: try DD/MM/YYYY or DD-MM-YYYY patterns
+                if (isNaN(ms)) {
+                    const dmy = timestamp.match(/(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})[\sT]?(\d{1,2}:\d{2}:?\d{0,2})?\.?.*/);
+                    if (dmy) {
+                        const isoStr = `${dmy[3]}-${dmy[2].padStart(2, '0')}-${dmy[1].padStart(2, '0')}T${dmy[4] || '00:00:00'}`;
+                        ms = new Date(isoStr).getTime();
+                    }
+                }
             }
         } else if (typeof timestamp === "number") {
             ms = timestamp > 1e12 ? timestamp : timestamp * 1000;
@@ -205,6 +213,28 @@ class AgentDVRCard extends HTMLElement {
         }
         if (isNaN(ms)) return null;
         return new Date(ms);
+    }
+
+    _extractTimestamp(rec) {
+        // Try common Agent DVR field names for timestamps
+        const candidates = [
+            rec.time, rec.timestamp, rec.s, rec.start,
+            rec.created, rec.date, rec.dt, rec.st,
+            rec.utc, rec.createdUtc, rec.startTime,
+        ];
+        for (const val of candidates) {
+            if (val !== undefined && val !== null && val !== "") {
+                const d = this._parseTimestamp(val);
+                if (d) return val;
+            }
+        }
+        // Fallback: extract date from filename (e.g. "20260316_103000.mp4")
+        const fn = rec.fn || rec.filename || "";
+        const fnMatch = fn.match(/(\d{4})(\d{2})(\d{2})_(\d{2})(\d{2})(\d{2})/);
+        if (fnMatch) {
+            return `${fnMatch[1]}-${fnMatch[2]}-${fnMatch[3]}T${fnMatch[4]}:${fnMatch[5]}:${fnMatch[6]}`;
+        }
+        return rec.time || rec.timestamp || rec.s || null;
     }
 
     _formatTime(timestamp) {
@@ -602,7 +632,7 @@ class AgentDVRCard extends HTMLElement {
             const fn = rec.fn || rec.filename || "";
             const thumbBase = fn.replace(/\.[^.]+$/, "");
             const thumbUrl = `/api/agent_dvr_enhanced/thumbnail/${entryId}/${oid}/${thumbBase}.jpg`;
-            const time = this._formatTime(rec.time || rec.timestamp || rec.s);
+            const time = this._formatTime(this._extractTimestamp(rec));
             const dur = this._formatDuration(rec.duration || rec.dur || rec.d);
             const tags = rec.tags || rec.tag || "";
 
@@ -638,7 +668,7 @@ class AgentDVRCard extends HTMLElement {
 
         for (let i = 0; i < this._recordings.length; i++) {
             const rec = this._recordings[i];
-            const ts = rec.time || rec.timestamp || rec.s;
+            const ts = this._extractTimestamp(rec);
             events.push({
                 type: "recording",
                 timestamp: ts,
@@ -671,22 +701,24 @@ class AgentDVRCard extends HTMLElement {
             return '<div class="empty">No events found</div>';
         }
 
-        // Debug: show raw timestamp from first event
-        const debugTs = events.length > 0
-            ? `<div style="padding:8px 16px;font-size:0.75em;color:var(--secondary-text-color);background:var(--secondary-background-color);overflow-x:auto;white-space:pre-wrap;max-height:150px;overflow-y:auto;"><strong>Debug (first event):</strong> timestamp=${this._escHtml(JSON.stringify(events[0].timestamp))}, type=${this._escHtml(typeof events[0].timestamp)}</div>`
+        // Debug: show raw first recording with all keys
+        const debugRec = this._recordings.length > 0 ? this._recordings[0] : null;
+        const debugTs = debugRec
+            ? `<div style="padding:8px 16px;font-size:0.75em;color:var(--secondary-text-color);background:var(--secondary-background-color);overflow-x:auto;white-space:pre-wrap;max-height:200px;overflow-y:auto;"><strong>Debug raw first recording:</strong>\n${this._escHtml(JSON.stringify(debugRec, null, 2))}\n\n<strong>Extracted timestamp:</strong> ${this._escHtml(JSON.stringify(this._extractTimestamp(debugRec)))}\n<strong>Parsed date:</strong> ${this._escHtml(String(this._parseTimestamp(this._extractTimestamp(debugRec))))}</div>`
             : "";
 
         // Group by date
         const groups = {};
         for (const ev of events) {
             const d = this._parseTimestamp(ev.timestamp);
-            if (!d) continue;
-            const key = d.toLocaleDateString(undefined, {
-                weekday: "long",
-                year: "numeric",
-                month: "long",
-                day: "numeric",
-            });
+            const key = d
+                ? d.toLocaleDateString(undefined, {
+                    weekday: "long",
+                    year: "numeric",
+                    month: "long",
+                    day: "numeric",
+                })
+                : "Unknown date";
             if (!groups[key]) groups[key] = [];
             groups[key].push({ ...ev, date: d });
         }
@@ -697,11 +729,13 @@ class AgentDVRCard extends HTMLElement {
             html += `<div class="timeline-date">${this._escHtml(date)}</div>`;
             html += `<div class="timeline-events">`;
             for (const ev of dayEvents) {
-                const timeStr = ev.date.toLocaleTimeString(undefined, {
-                    hour: "2-digit",
-                    minute: "2-digit",
-                    second: "2-digit",
-                });
+                const timeStr = ev.date
+                    ? ev.date.toLocaleTimeString(undefined, {
+                        hour: "2-digit",
+                        minute: "2-digit",
+                        second: "2-digit",
+                    })
+                    : "--:--:--";
                 const dur = ev.duration ? ` (${this._formatDuration(ev.duration)})` : "";
                 const cls = ev.type === "alert" ? "timeline-event alert-event" : "timeline-event";
                 const clickable = ev.idx >= 0 ? `data-idx="${ev.idx}"` : "";
