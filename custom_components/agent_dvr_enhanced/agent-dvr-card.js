@@ -1,6 +1,6 @@
 /**
  * Agent DVR Card - Custom Lovelace card for Agent DVR Enhanced
- * Version: 2026.03.16.3
+ * Version: 1.1.0
  * Provides Live, Timeline, and Recordings views.
  */
 
@@ -506,7 +506,7 @@ class AgentDVRCard extends HTMLElement {
       </style>
 
       <div class="card">
-        <div class="header">${this._escHtml(name)} <span style="font-size:0.6em;color:var(--secondary-text-color)">v2026.03.16.4</span></div>
+        <div class="header">${this._escHtml(name)} <span style="font-size:0.6em;color:var(--secondary-text-color)">v1.1.0</span></div>
         <div class="tabs">
           <div class="tab ${this._activeTab === "live" ? "active" : ""}" data-tab="live">
             <svg viewBox="0 0 24 24"><path d="M17 10.5V7c0-.55-.45-1-1-1H4c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h12c.55 0 1-.45 1-1v-3.5l4 4v-11l-4 4z"/></svg>
@@ -727,7 +727,7 @@ class AgentDVRCard extends HTMLElement {
             const extracted = this._extractTimestamp(debugRec);
             const parsed = this._parseTimestamp(extracted);
             debugTs = `<div style="padding:8px 16px;font-size:0.75em;color:var(--secondary-text-color);background:var(--secondary-background-color);overflow-x:auto;white-space:pre-wrap;max-height:250px;overflow-y:auto;">` +
-                `<strong>v2026.03.16.4 | Fields (${keys.length}):</strong>\\n${this._escHtml(fieldInfo)}\\n\\n` +
+                `<strong>v1.1.0 | Fields (${keys.length}):</strong>\\n${this._escHtml(fieldInfo)}\\n\\n` +
                 `<strong>Extracted:</strong> ${this._escHtml(JSON.stringify(extracted))}\\n` +
                 `<strong>Parsed:</strong> ${this._escHtml(String(parsed))}</div>`;
         }
