@@ -217,16 +217,21 @@ class AgentDVRCard extends HTMLElement {
     }
 
     _extractTimestamp(rec) {
-        // Try common Agent DVR field names for timestamps
-        const candidates = [
-            rec.time, rec.timestamp, rec.s, rec.start,
-            rec.created, rec.date, rec.dt, rec.st,
-            rec.utc, rec.createdUtc, rec.startTime,
-        ];
-        for (const val of candidates) {
-            if (val !== undefined && val !== null && val !== "") {
-                const d = this._parseTimestamp(val);
-                if (d) return val;
+        if (!rec || typeof rec !== "object") return null;
+        // Try ALL fields on the object and return the first one that parses to a valid date
+        for (const key of Object.keys(rec)) {
+            const val = rec[key];
+            if (val === undefined || val === null || val === "") continue;
+            // Skip fields that are clearly not timestamps
+            if (typeof val === "object") continue;
+            if (typeof val === "boolean") continue;
+            // Skip very long strings (likely filenames or data)
+            if (typeof val === "string" && val.length > 50) continue;
+            const d = this._parseTimestamp(val);
+            if (d) {
+                // Sanity check: year between 2000 and 2100
+                const year = d.getFullYear();
+                if (year >= 2000 && year <= 2100) return val;
             }
         }
         // Fallback: extract date from filename (e.g. "20260316_103000.mp4")
@@ -235,7 +240,7 @@ class AgentDVRCard extends HTMLElement {
         if (fnMatch) {
             return `${fnMatch[1]}-${fnMatch[2]}-${fnMatch[3]}T${fnMatch[4]}:${fnMatch[5]}:${fnMatch[6]}`;
         }
-        return rec.time || rec.timestamp || rec.s || null;
+        return null;
     }
 
     _formatTime(timestamp) {
@@ -501,7 +506,7 @@ class AgentDVRCard extends HTMLElement {
       </style>
 
       <div class="card">
-        <div class="header">${this._escHtml(name)} <span style="font-size:0.6em;color:var(--secondary-text-color)">v2026.03.16.3</span></div>
+        <div class="header">${this._escHtml(name)} <span style="font-size:0.6em;color:var(--secondary-text-color)">v2026.03.16.4</span></div>
         <div class="tabs">
           <div class="tab ${this._activeTab === "live" ? "active" : ""}" data-tab="live">
             <svg viewBox="0 0 24 24"><path d="M17 10.5V7c0-.55-.45-1-1-1H4c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h12c.55 0 1-.45 1-1v-3.5l4 4v-11l-4 4z"/></svg>
@@ -713,11 +718,19 @@ class AgentDVRCard extends HTMLElement {
             return '<div class="empty">No events found</div>';
         }
 
-        // Debug: show raw first recording with all keys
+        // Debug: show raw first recording with all keys and types
         const debugRec = this._recordings.length > 0 ? this._recordings[0] : null;
-        const debugTs = debugRec
-            ? `<div style="padding:8px 16px;font-size:0.75em;color:var(--secondary-text-color);background:var(--secondary-background-color);overflow-x:auto;white-space:pre-wrap;max-height:200px;overflow-y:auto;"><strong>Debug raw first recording:</strong>\n${this._escHtml(JSON.stringify(debugRec, null, 2))}\n\n<strong>Extracted timestamp:</strong> ${this._escHtml(JSON.stringify(this._extractTimestamp(debugRec)))}\n<strong>Parsed date:</strong> ${this._escHtml(String(this._parseTimestamp(this._extractTimestamp(debugRec))))}</div>`
-            : "";
+        let debugTs = "";
+        if (debugRec) {
+            const keys = Object.keys(debugRec);
+            const fieldInfo = keys.map(k => `${k} (${typeof debugRec[k]}): ${JSON.stringify(debugRec[k])}`).join("\\n");
+            const extracted = this._extractTimestamp(debugRec);
+            const parsed = this._parseTimestamp(extracted);
+            debugTs = `<div style="padding:8px 16px;font-size:0.75em;color:var(--secondary-text-color);background:var(--secondary-background-color);overflow-x:auto;white-space:pre-wrap;max-height:250px;overflow-y:auto;">` +
+                `<strong>v2026.03.16.4 | Fields (${keys.length}):</strong>\\n${this._escHtml(fieldInfo)}\\n\\n` +
+                `<strong>Extracted:</strong> ${this._escHtml(JSON.stringify(extracted))}\\n` +
+                `<strong>Parsed:</strong> ${this._escHtml(String(parsed))}</div>`;
+        }
 
         // Group by date
         const groups = {};
