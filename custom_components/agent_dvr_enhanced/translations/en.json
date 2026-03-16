@@ -1,20 +1,20 @@
 {
-  "config": {
-    "step": {
-      "user": {
-        "title": "Connect to Agent DVR",
-        "description": "Enter the URL of your Agent DVR server.",
-        "data": {
-          "server_url": "Server URL"
+    "config": {
+        "step": {
+            "user": {
+                "title": "Connect to Agent DVR",
+                "description": "Enter the URL of your Agent DVR server.",
+                "data": {
+                    "server_url": "Server URL"
+                }
+            }
+        },
+        "error": {
+            "cannot_connect": "Failed to connect to the AgentDVR server.",
+            "unknown": "An unexpected error occurred."
+        },
+        "abort": {
+            "already_configured": "This AgentDVR server is already configured."
         }
-      }
-    },
-    "error": {
-      "cannot_connect": "Failed to connect to the AgentDVR server.",
-      "unknown": "An unexpected error occurred."
-    },
-    "abort": {
-      "already_configured": "This AgentDVR server is already configured."
     }
-  }
 }
