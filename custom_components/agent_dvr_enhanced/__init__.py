@@ -41,6 +41,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             hass.http.register_view(AgentDVRThumbnailProxyView())
             hass.http.register_view(AgentDVREventsApiView())
             hass.http.register_view(AgentDVRAlertsApiView())
+            hass.http.register_view(AgentDVRDebugApiView())
             hass.http.register_view(AgentDVRCardJsView(js_path))
             hass.data[f"{DOMAIN}_views_registered"] = True
     except Exception:
@@ -226,3 +227,52 @@ class AgentDVRCardJsView(HomeAssistantView):
             )
         except FileNotFoundError:
             return web.Response(status=404, text="Card JS not found")
+
+
+class AgentDVRDebugApiView(HomeAssistantView):
+    """Debug view to inspect raw API responses from AgentDVR."""
+
+    url = "/api/agent_dvr_enhanced/debug/{entry_id}/{oid}/{ot}"
+    name = "api:agent_dvr_enhanced:debug"
+    requires_auth = True
+
+    async def get(
+        self, request: web.Request, entry_id: str, oid: str, ot: str
+    ) -> web.Response:
+        """Return raw events and alerts from AgentDVR for debugging."""
+        hass = request.app["hass"]
+
+        if DOMAIN not in hass.data or entry_id not in hass.data[DOMAIN]:
+            return web.json_response({"error": "Integration not found"}, status=404)
+
+        try:
+            oid_int = int(oid)
+            ot_int = int(ot)
+        except ValueError:
+            return web.json_response({"error": "Invalid parameters"}, status=400)
+
+        coordinator: AgentDVRCoordinator = hass.data[DOMAIN][entry_id]
+        result = {}
+
+        try:
+            events_raw = await coordinator.client._request_json(
+                f"q/getEvents?oid={oid_int}&ot={ot_int}"
+            )
+            result["events_raw"] = events_raw
+            result["events_type"] = type(events_raw).__name__
+            if isinstance(events_raw, list):
+                result["events_count"] = len(events_raw)
+                if events_raw:
+                    result["events_first"] = events_raw[0]
+                    result["events_keys"] = list(events_raw[0].keys()) if isinstance(events_raw[0], dict) else None
+        except Exception as exc:
+            result["events_error"] = str(exc)
+
+        try:
+            alerts_raw = await coordinator.client._request_json("alerts.json")
+            result["alerts_raw"] = alerts_raw
+            result["alerts_type"] = type(alerts_raw).__name__
+        except Exception as exc:
+            result["alerts_error"] = str(exc)
+
+        return web.json_response(result)

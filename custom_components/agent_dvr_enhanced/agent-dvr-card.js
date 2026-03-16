@@ -4,212 +4,212 @@
  */
 
 class AgentDVRCard extends HTMLElement {
-  static get properties() {
-    return {
-      hass: {},
-      config: {},
-    };
-  }
-
-  constructor() {
-    super();
-    this.attachShadow({ mode: "open" });
-    this._activeTab = "live";
-    this._recordings = [];
-    this._alerts = [];
-    this._loading = false;
-    this._playingRecording = null;
-  }
-
-  setConfig(config) {
-    if (!config.camera_entity) {
-      throw new Error("You need to define a camera_entity");
+    static get properties() {
+        return {
+            hass: {},
+            config: {},
+        };
     }
-    this._config = config;
-    this._render();
-  }
 
-  set hass(hass) {
-    this._hass = hass;
-    if (!this._initialized) {
-      this._initialized = true;
-      this._render();
+    constructor() {
+        super();
+        this.attachShadow({ mode: "open" });
+        this._activeTab = "live";
+        this._recordings = [];
+        this._alerts = [];
+        this._loading = false;
+        this._playingRecording = null;
     }
-    this._updateCameraImage();
-  }
 
-  get hass() {
-    return this._hass;
-  }
-
-  _getEntryInfo() {
-    if (!this._hass) return null;
-    const state = this._hass.states[this._config.camera_entity];
-    if (!state) return null;
-    const oid = state.attributes.object_id;
-    const ot = state.attributes.object_type;
-
-    let entryId = this._config.entry_id || null;
-
-    if (!entryId) {
-      const entities = this._hass.entities
-        ? Object.values(this._hass.entities)
-        : [];
-      const entity = entities.find(
-        (e) => e.entity_id === this._config.camera_entity
-      );
-
-      if (entity && entity.config_entry_id) {
-        entryId = entity.config_entry_id;
-      } else if (entity && entity.unique_id) {
-        const parts = entity.unique_id.split("_");
-        if (parts.length >= 3) {
-          entryId = parts.slice(0, -2).join("_");
+    setConfig(config) {
+        if (!config.camera_entity) {
+            throw new Error("You need to define a camera_entity");
         }
-      }
+        this._config = config;
+        this._render();
     }
 
-    return { entryId, oid, ot };
-  }
-
-  _updateCameraImage() {
-    if (this._activeTab !== "live") return;
-    const img = this.shadowRoot.querySelector("#live-image");
-    if (!img || !this._hass) return;
-    const state = this._hass.states[this._config.camera_entity];
-    if (!state) return;
-    const token = state.attributes.access_token;
-    const url = `/api/camera_proxy/${this._config.camera_entity}?token=${token}&t=${Date.now()}`;
-    img.src = url;
-  }
-
-  _switchTab(tab) {
-    this._activeTab = tab;
-    this._playingRecording = null;
-    this._render();
-
-    if (tab === "live") {
-      this._updateCameraImage();
-      this._startLiveRefresh();
-    } else {
-      this._stopLiveRefresh();
+    set hass(hass) {
+        this._hass = hass;
+        if (!this._initialized) {
+            this._initialized = true;
+            this._render();
+        }
+        this._updateCameraImage();
     }
 
-    if (tab === "recordings" && this._recordings.length === 0) {
-      this._fetchRecordings();
-    }
-    if (tab === "timeline") {
-      this._fetchAlerts();
-      if (this._recordings.length === 0) {
-        this._fetchRecordings();
-      }
-    }
-  }
-
-  _startLiveRefresh() {
-    this._stopLiveRefresh();
-    this._refreshInterval = setInterval(() => {
-      this._updateCameraImage();
-    }, 1000);
-  }
-
-  _stopLiveRefresh() {
-    if (this._refreshInterval) {
-      clearInterval(this._refreshInterval);
-      this._refreshInterval = null;
-    }
-  }
-
-  async _fetchRecordings() {
-    const info = this._getEntryInfo();
-    if (!info || !info.entryId) return;
-
-    this._loading = true;
-    this._render();
-
-    try {
-      const resp = await this._hass.callApi(
-        "GET",
-        `agent_dvr_enhanced/events/${info.entryId}/${info.oid}/${info.ot}`
-      );
-      this._recordings = Array.isArray(resp) ? resp : [];
-    } catch (err) {
-      console.error("Error fetching recordings:", err);
-      this._recordings = [];
+    get hass() {
+        return this._hass;
     }
 
-    this._loading = false;
-    this._render();
-  }
+    _getEntryInfo() {
+        if (!this._hass) return null;
+        const state = this._hass.states[this._config.camera_entity];
+        if (!state) return null;
+        const oid = state.attributes.object_id;
+        const ot = state.attributes.object_type;
 
-  async _fetchAlerts() {
-    const info = this._getEntryInfo();
-    if (!info || !info.entryId) return;
+        let entryId = this._config.entry_id || null;
 
-    try {
-      const resp = await this._hass.callApi(
-        "GET",
-        `agent_dvr_enhanced/alerts/${info.entryId}`
-      );
-      this._alerts = resp.alerts || resp || [];
-    } catch (err) {
-      console.error("Error fetching alerts:", err);
-      this._alerts = [];
+        if (!entryId) {
+            const entities = this._hass.entities
+                ? Object.values(this._hass.entities)
+                : [];
+            const entity = entities.find(
+                (e) => e.entity_id === this._config.camera_entity
+            );
+
+            if (entity && entity.config_entry_id) {
+                entryId = entity.config_entry_id;
+            } else if (entity && entity.unique_id) {
+                const parts = entity.unique_id.split("_");
+                if (parts.length >= 3) {
+                    entryId = parts.slice(0, -2).join("_");
+                }
+            }
+        }
+
+        return { entryId, oid, ot };
     }
-    this._render();
-  }
 
-  _playRecording(rec) {
-    const info = this._getEntryInfo();
-    if (!info || !info.entryId) return;
-    const fn = rec.fn || rec.filename || "";
-    this._playingRecording = {
-      ...rec,
-      url: `/api/agent_dvr_enhanced/recording/${info.entryId}/${info.oid}/${info.ot}/${fn}`,
-    };
-    this._render();
-  }
-
-  _stopPlayback() {
-    this._playingRecording = null;
-    this._render();
-  }
-
-  _formatTime(timestamp) {
-    if (!timestamp) return "";
-    try {
-      let d;
-      if (typeof timestamp === "number") {
-        d = new Date(timestamp > 1e12 ? timestamp : timestamp * 1000);
-      } else {
-        d = new Date(timestamp);
-      }
-      return d.toLocaleString();
-    } catch {
-      return String(timestamp);
+    _updateCameraImage() {
+        if (this._activeTab !== "live") return;
+        const img = this.shadowRoot.querySelector("#live-image");
+        if (!img || !this._hass) return;
+        const state = this._hass.states[this._config.camera_entity];
+        if (!state) return;
+        const token = state.attributes.access_token;
+        const url = `/api/camera_proxy/${this._config.camera_entity}?token=${token}&t=${Date.now()}`;
+        img.src = url;
     }
-  }
 
-  _formatDuration(dur) {
-    if (!dur) return "";
-    const s = parseInt(dur, 10);
-    if (isNaN(s)) return "";
-    const m = Math.floor(s / 60);
-    const sec = s % 60;
-    return m > 0 ? `${m}m ${sec}s` : `${sec}s`;
-  }
+    _switchTab(tab) {
+        this._activeTab = tab;
+        this._playingRecording = null;
+        this._render();
 
-  _render() {
-    if (!this._config) return;
+        if (tab === "live") {
+            this._updateCameraImage();
+            this._startLiveRefresh();
+        } else {
+            this._stopLiveRefresh();
+        }
 
-    const state = this._hass
-      ? this._hass.states[this._config.camera_entity]
-      : null;
-    const name =
-      this._config.title ||
-      (state ? state.attributes.friendly_name : "Agent DVR");
+        if (tab === "recordings" && this._recordings.length === 0) {
+            this._fetchRecordings();
+        }
+        if (tab === "timeline") {
+            this._fetchAlerts();
+            if (this._recordings.length === 0) {
+                this._fetchRecordings();
+            }
+        }
+    }
 
-    this.shadowRoot.innerHTML = `
+    _startLiveRefresh() {
+        this._stopLiveRefresh();
+        this._refreshInterval = setInterval(() => {
+            this._updateCameraImage();
+        }, 1000);
+    }
+
+    _stopLiveRefresh() {
+        if (this._refreshInterval) {
+            clearInterval(this._refreshInterval);
+            this._refreshInterval = null;
+        }
+    }
+
+    async _fetchRecordings() {
+        const info = this._getEntryInfo();
+        if (!info || !info.entryId) return;
+
+        this._loading = true;
+        this._render();
+
+        try {
+            const resp = await this._hass.callApi(
+                "GET",
+                `agent_dvr_enhanced/events/${info.entryId}/${info.oid}/${info.ot}`
+            );
+            this._recordings = Array.isArray(resp) ? resp : [];
+        } catch (err) {
+            console.error("Error fetching recordings:", err);
+            this._recordings = [];
+        }
+
+        this._loading = false;
+        this._render();
+    }
+
+    async _fetchAlerts() {
+        const info = this._getEntryInfo();
+        if (!info || !info.entryId) return;
+
+        try {
+            const resp = await this._hass.callApi(
+                "GET",
+                `agent_dvr_enhanced/alerts/${info.entryId}`
+            );
+            this._alerts = resp.alerts || resp || [];
+        } catch (err) {
+            console.error("Error fetching alerts:", err);
+            this._alerts = [];
+        }
+        this._render();
+    }
+
+    _playRecording(rec) {
+        const info = this._getEntryInfo();
+        if (!info || !info.entryId) return;
+        const fn = rec.fn || rec.filename || "";
+        this._playingRecording = {
+            ...rec,
+            url: `/api/agent_dvr_enhanced/recording/${info.entryId}/${info.oid}/${info.ot}/${fn}`,
+        };
+        this._render();
+    }
+
+    _stopPlayback() {
+        this._playingRecording = null;
+        this._render();
+    }
+
+    _formatTime(timestamp) {
+        if (!timestamp) return "";
+        try {
+            let d;
+            if (typeof timestamp === "number") {
+                d = new Date(timestamp > 1e12 ? timestamp : timestamp * 1000);
+            } else {
+                d = new Date(timestamp);
+            }
+            return d.toLocaleString();
+        } catch {
+            return String(timestamp);
+        }
+    }
+
+    _formatDuration(dur) {
+        if (!dur) return "";
+        const s = parseInt(dur, 10);
+        if (isNaN(s)) return "";
+        const m = Math.floor(s / 60);
+        const sec = s % 60;
+        return m > 0 ? `${m}m ${sec}s` : `${sec}s`;
+    }
+
+    _render() {
+        if (!this._config) return;
+
+        const state = this._hass
+            ? this._hass.states[this._config.camera_entity]
+            : null;
+        const name =
+            this._config.title ||
+            (state ? state.attributes.friendly_name : "Agent DVR");
+
+        this.shadowRoot.innerHTML = `
       <style>
         :host {
           display: block;
@@ -468,71 +468,71 @@ class AgentDVRCard extends HTMLElement {
       </div>
     `;
 
-    // Attach tab click handlers
-    this.shadowRoot.querySelectorAll(".tab").forEach((tab) => {
-      tab.addEventListener("click", () => {
-        this._switchTab(tab.dataset.tab);
-      });
-    });
+        // Attach tab click handlers
+        this.shadowRoot.querySelectorAll(".tab").forEach((tab) => {
+            tab.addEventListener("click", () => {
+                this._switchTab(tab.dataset.tab);
+            });
+        });
 
-    // Attach recording item click handlers
-    this.shadowRoot.querySelectorAll(".rec-item").forEach((item) => {
-      item.addEventListener("click", () => {
-        const idx = parseInt(item.dataset.idx, 10);
-        if (!isNaN(idx) && this._recordings[idx]) {
-          this._playRecording(this._recordings[idx]);
+        // Attach recording item click handlers
+        this.shadowRoot.querySelectorAll(".rec-item").forEach((item) => {
+            item.addEventListener("click", () => {
+                const idx = parseInt(item.dataset.idx, 10);
+                if (!isNaN(idx) && this._recordings[idx]) {
+                    this._playRecording(this._recordings[idx]);
+                }
+            });
+        });
+
+        // Attach timeline event click handlers
+        this.shadowRoot.querySelectorAll(".timeline-event").forEach((item) => {
+            item.addEventListener("click", () => {
+                const idx = parseInt(item.dataset.idx, 10);
+                if (!isNaN(idx) && this._recordings[idx]) {
+                    this._activeTab = "recordings";
+                    this._playRecording(this._recordings[idx]);
+                }
+            });
+        });
+
+        // Close button
+        const closeBtn = this.shadowRoot.querySelector(".player-close");
+        if (closeBtn) {
+            closeBtn.addEventListener("click", () => this._stopPlayback());
         }
-      });
-    });
 
-    // Attach timeline event click handlers
-    this.shadowRoot.querySelectorAll(".timeline-event").forEach((item) => {
-      item.addEventListener("click", () => {
-        const idx = parseInt(item.dataset.idx, 10);
-        if (!isNaN(idx) && this._recordings[idx]) {
-          this._activeTab = "recordings";
-          this._playRecording(this._recordings[idx]);
+        // Start live refresh if on live tab
+        if (this._activeTab === "live") {
+            this._startLiveRefresh();
         }
-      });
-    });
-
-    // Close button
-    const closeBtn = this.shadowRoot.querySelector(".player-close");
-    if (closeBtn) {
-      closeBtn.addEventListener("click", () => this._stopPlayback());
     }
 
-    // Start live refresh if on live tab
-    if (this._activeTab === "live") {
-      this._startLiveRefresh();
-    }
-  }
-
-  _renderContent(state) {
-    switch (this._activeTab) {
-      case "live":
-        return this._renderLive(state);
-      case "timeline":
-        return this._renderTimeline();
-      case "recordings":
-        return this._renderRecordings();
-      default:
-        return "";
-    }
-  }
-
-  _renderLive(state) {
-    if (!state) {
-      return '<div class="empty">Camera unavailable</div>';
+    _renderContent(state) {
+        switch (this._activeTab) {
+            case "live":
+                return this._renderLive(state);
+            case "timeline":
+                return this._renderTimeline();
+            case "recordings":
+                return this._renderRecordings();
+            default:
+                return "";
+        }
     }
 
-    const token = state.attributes.access_token;
-    const imgUrl = `/api/camera_proxy/${this._config.camera_entity}?token=${token}`;
-    const isRecording = state.attributes.recording || false;
-    const detected = state.attributes.detected || false;
-    const connected = state.attributes.connected !== false;
+    _renderLive(state) {
+        if (!state) {
+            return '<div class="empty">Camera unavailable</div>';
+        }
 
-    return `
+        const token = state.attributes.access_token;
+        const imgUrl = `/api/camera_proxy/${this._config.camera_entity}?token=${token}`;
+        const isRecording = state.attributes.recording || false;
+        const detected = state.attributes.detected || false;
+        const connected = state.attributes.connected !== false;
+
+        return `
       <div class="live-container">
         <img id="live-image" src="${imgUrl}" alt="Live view" />
       </div>
@@ -542,39 +542,39 @@ class AgentDVRCard extends HTMLElement {
         ${detected ? '<span><span class="status-dot alert"></span>Motion</span>' : ""}
       </div>
     `;
-  }
-
-  _renderRecordings() {
-    if (this._loading) {
-      return '<div class="loading">Loading recordings...</div>';
     }
 
-    if (this._playingRecording) {
-      return `
+    _renderRecordings() {
+        if (this._loading) {
+            return '<div class="loading">Loading recordings...</div>';
+        }
+
+        if (this._playingRecording) {
+            return `
         <div class="player-container">
           <video controls autoplay src="${this._playingRecording.url}"></video>
           <button class="player-close">&times;</button>
         </div>
       `;
-    }
+        }
 
-    if (this._recordings.length === 0) {
-      return '<div class="empty">No recordings found</div>';
-    }
+        if (this._recordings.length === 0) {
+            return '<div class="empty">No recordings found</div>';
+        }
 
-    const info = this._getEntryInfo();
-    const entryId = info ? info.entryId : "";
-    const oid = info ? info.oid : "";
+        const info = this._getEntryInfo();
+        const entryId = info ? info.entryId : "";
+        const oid = info ? info.oid : "";
 
-    const items = this._recordings.map((rec, idx) => {
-      const fn = rec.fn || rec.filename || "";
-      const thumbBase = fn.replace(/\.[^.]+$/, "");
-      const thumbUrl = `/api/agent_dvr_enhanced/thumbnail/${entryId}/${oid}/${thumbBase}.jpg`;
-      const time = this._formatTime(rec.time || rec.timestamp || rec.s);
-      const dur = this._formatDuration(rec.duration || rec.dur || rec.d);
-      const tags = rec.tags || rec.tag || "";
+        const items = this._recordings.map((rec, idx) => {
+            const fn = rec.fn || rec.filename || "";
+            const thumbBase = fn.replace(/\.[^.]+$/, "");
+            const thumbUrl = `/api/agent_dvr_enhanced/thumbnail/${entryId}/${oid}/${thumbBase}.jpg`;
+            const time = this._formatTime(rec.time || rec.timestamp || rec.s);
+            const dur = this._formatDuration(rec.duration || rec.dur || rec.d);
+            const tags = rec.tags || rec.tag || "";
 
-      return `
+            return `
         <div class="rec-item" data-idx="${idx}">
           <img class="rec-thumb" src="${thumbUrl}" alt="" loading="lazy"
                onerror="this.style.background='#333'" />
@@ -587,127 +587,127 @@ class AgentDVRCard extends HTMLElement {
           </div>
         </div>
       `;
-    });
-
-    return `<div class="recordings-list">${items.join("")}</div>`;
-  }
-
-  _renderTimeline() {
-    if (this._loading) {
-      return '<div class="loading">Loading timeline...</div>';
-    }
-
-    // Combine recordings and alerts, group by day
-    const events = [];
-
-    for (let i = 0; i < this._recordings.length; i++) {
-      const rec = this._recordings[i];
-      const ts = rec.time || rec.timestamp || rec.s;
-      events.push({
-        type: "recording",
-        timestamp: ts,
-        label: rec.tags || rec.tag || "Recording",
-        duration: rec.duration || rec.dur || rec.d,
-        idx: i,
-      });
-    }
-
-    for (const alert of this._alerts) {
-      events.push({
-        type: "alert",
-        timestamp: alert.time || alert.timestamp,
-        label: alert.reason || alert.msg || "Alert",
-        duration: null,
-        idx: -1,
-      });
-    }
-
-    // Sort newest first
-    events.sort((a, b) => {
-      const ta = typeof a.timestamp === "number" ? a.timestamp : new Date(a.timestamp).getTime();
-      const tb = typeof b.timestamp === "number" ? b.timestamp : new Date(b.timestamp).getTime();
-      return tb - ta;
-    });
-
-    if (events.length === 0) {
-      return '<div class="empty">No events found</div>';
-    }
-
-    // Group by date
-    const groups = {};
-    for (const ev of events) {
-      let d;
-      try {
-        const ts = typeof ev.timestamp === "number"
-          ? (ev.timestamp > 1e12 ? ev.timestamp : ev.timestamp * 1000)
-          : new Date(ev.timestamp).getTime();
-        d = new Date(ts);
-      } catch {
-        continue;
-      }
-      const key = d.toLocaleDateString(undefined, {
-        weekday: "long",
-        year: "numeric",
-        month: "long",
-        day: "numeric",
-      });
-      if (!groups[key]) groups[key] = [];
-      groups[key].push({ ...ev, date: d });
-    }
-
-    let html = "";
-    for (const [date, dayEvents] of Object.entries(groups)) {
-      html += `<div class="timeline-day">`;
-      html += `<div class="timeline-date">${this._escHtml(date)}</div>`;
-      html += `<div class="timeline-events">`;
-      for (const ev of dayEvents) {
-        const timeStr = ev.date.toLocaleTimeString(undefined, {
-          hour: "2-digit",
-          minute: "2-digit",
-          second: "2-digit",
         });
-        const dur = ev.duration ? ` (${this._formatDuration(ev.duration)})` : "";
-        const cls = ev.type === "alert" ? "timeline-event alert-event" : "timeline-event";
-        const clickable = ev.idx >= 0 ? `data-idx="${ev.idx}"` : "";
-        html += `
+
+        return `<div class="recordings-list">${items.join("")}</div>`;
+    }
+
+    _renderTimeline() {
+        if (this._loading) {
+            return '<div class="loading">Loading timeline...</div>';
+        }
+
+        // Combine recordings and alerts, group by day
+        const events = [];
+
+        for (let i = 0; i < this._recordings.length; i++) {
+            const rec = this._recordings[i];
+            const ts = rec.time || rec.timestamp || rec.s;
+            events.push({
+                type: "recording",
+                timestamp: ts,
+                label: rec.tags || rec.tag || "Recording",
+                duration: rec.duration || rec.dur || rec.d,
+                idx: i,
+            });
+        }
+
+        for (const alert of this._alerts) {
+            events.push({
+                type: "alert",
+                timestamp: alert.time || alert.timestamp,
+                label: alert.reason || alert.msg || "Alert",
+                duration: null,
+                idx: -1,
+            });
+        }
+
+        // Sort newest first
+        events.sort((a, b) => {
+            const ta = typeof a.timestamp === "number" ? a.timestamp : new Date(a.timestamp).getTime();
+            const tb = typeof b.timestamp === "number" ? b.timestamp : new Date(b.timestamp).getTime();
+            return tb - ta;
+        });
+
+        if (events.length === 0) {
+            return '<div class="empty">No events found</div>';
+        }
+
+        // Group by date
+        const groups = {};
+        for (const ev of events) {
+            let d;
+            try {
+                const ts = typeof ev.timestamp === "number"
+                    ? (ev.timestamp > 1e12 ? ev.timestamp : ev.timestamp * 1000)
+                    : new Date(ev.timestamp).getTime();
+                d = new Date(ts);
+            } catch {
+                continue;
+            }
+            const key = d.toLocaleDateString(undefined, {
+                weekday: "long",
+                year: "numeric",
+                month: "long",
+                day: "numeric",
+            });
+            if (!groups[key]) groups[key] = [];
+            groups[key].push({ ...ev, date: d });
+        }
+
+        let html = "";
+        for (const [date, dayEvents] of Object.entries(groups)) {
+            html += `<div class="timeline-day">`;
+            html += `<div class="timeline-date">${this._escHtml(date)}</div>`;
+            html += `<div class="timeline-events">`;
+            for (const ev of dayEvents) {
+                const timeStr = ev.date.toLocaleTimeString(undefined, {
+                    hour: "2-digit",
+                    minute: "2-digit",
+                    second: "2-digit",
+                });
+                const dur = ev.duration ? ` (${this._formatDuration(ev.duration)})` : "";
+                const cls = ev.type === "alert" ? "timeline-event alert-event" : "timeline-event";
+                const clickable = ev.idx >= 0 ? `data-idx="${ev.idx}"` : "";
+                html += `
           <div class="${cls}" ${clickable}>
             <div class="tl-time">${this._escHtml(timeStr)}</div>
             <div class="tl-detail">${this._escHtml(ev.label)}${dur}</div>
           </div>
         `;
-      }
-      html += `</div></div>`;
+            }
+            html += `</div></div>`;
+        }
+
+        return `<div class="timeline">${html}</div>`;
     }
 
-    return `<div class="timeline">${html}</div>`;
-  }
+    _escHtml(str) {
+        const div = document.createElement("div");
+        div.textContent = str || "";
+        return div.innerHTML;
+    }
 
-  _escHtml(str) {
-    const div = document.createElement("div");
-    div.textContent = str || "";
-    return div.innerHTML;
-  }
+    disconnectedCallback() {
+        this._stopLiveRefresh();
+    }
 
-  disconnectedCallback() {
-    this._stopLiveRefresh();
-  }
+    getCardSize() {
+        return 5;
+    }
 
-  getCardSize() {
-    return 5;
-  }
-
-  static getStubConfig() {
-    return { camera_entity: "" };
-  }
+    static getStubConfig() {
+        return { camera_entity: "" };
+    }
 }
 
 customElements.define("agent-dvr-card", AgentDVRCard);
 
 window.customCards = window.customCards || [];
 window.customCards.push({
-  type: "agent-dvr-card",
-  name: "Agent DVR Card",
-  description: "Live view, timeline, and recordings for Agent DVR cameras",
-  preview: false,
-  documentationURL: "https://github.com/jensdufour/ha-agent-dvr-enhanced",
+    type: "agent-dvr-card",
+    name: "Agent DVR Card",
+    description: "Live view, timeline, and recordings for Agent DVR cameras",
+    preview: false,
+    documentationURL: "https://github.com/jensdufour/ha-agent-dvr-enhanced",
 });
