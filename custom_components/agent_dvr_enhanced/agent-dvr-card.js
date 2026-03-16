@@ -1,6 +1,6 @@
 /**
  * Agent DVR Card - Custom Lovelace card for Agent DVR Enhanced
- * Version: 1.1.0
+ * Version: 1.2.0
  * Provides Live, Timeline, and Recordings views.
  */
 
@@ -183,18 +183,21 @@ class AgentDVRCard extends HTMLElement {
         this._render();
     }
 
+    // .NET ticks epoch: ticks between 0001-01-01 and 1970-01-01
+    static get DOTNET_EPOCH_TICKS() { return 621355968000000000; }
+
     _parseTimestamp(timestamp) {
         if (!timestamp && timestamp !== 0) return null;
         let ms;
-        // .NET JSON date format: /Date(1234567890000)/
         if (typeof timestamp === "string") {
+            // .NET JSON date format: /Date(1234567890000)/
             const dotnetMatch = timestamp.match(/\/Date\(([-+]?\d+)\)\//);
             if (dotnetMatch) {
                 ms = parseInt(dotnetMatch[1], 10);
             } else if (/^\d+$/.test(timestamp.trim())) {
                 // Numeric string
-                const num = parseInt(timestamp.trim(), 10);
-                ms = num > 1e12 ? num : num * 1000;
+                const num = parseFloat(timestamp.trim());
+                ms = this._numToMs(num);
             } else {
                 // Try ISO 8601 or other parseable string
                 ms = new Date(timestamp).getTime();
@@ -208,12 +211,25 @@ class AgentDVRCard extends HTMLElement {
                 }
             }
         } else if (typeof timestamp === "number") {
-            ms = timestamp > 1e12 ? timestamp : timestamp * 1000;
+            ms = this._numToMs(timestamp);
         } else {
             return null;
         }
         if (isNaN(ms)) return null;
         return new Date(ms);
+    }
+
+    _numToMs(num) {
+        // .NET ticks: very large numbers (> 1e15), 100-nanosecond intervals since 0001-01-01
+        if (num > 1e15) {
+            return (num - AgentDVRCard.DOTNET_EPOCH_TICKS) / 10000;
+        }
+        // Milliseconds (> 1e12)
+        if (num > 1e12) {
+            return num;
+        }
+        // Seconds
+        return num * 1000;
     }
 
     _extractTimestamp(rec) {
@@ -506,7 +522,7 @@ class AgentDVRCard extends HTMLElement {
       </style>
 
       <div class="card">
-        <div class="header">${this._escHtml(name)} <span style="font-size:0.6em;color:var(--secondary-text-color)">v1.1.0</span></div>
+        <div class="header">${this._escHtml(name)} <span style="font-size:0.6em;color:var(--secondary-text-color)">v1.2.0</span></div>
         <div class="tabs">
           <div class="tab ${this._activeTab === "live" ? "active" : ""}" data-tab="live">
             <svg viewBox="0 0 24 24"><path d="M17 10.5V7c0-.55-.45-1-1-1H4c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h12c.55 0 1-.45 1-1v-3.5l4 4v-11l-4 4z"/></svg>
@@ -727,7 +743,7 @@ class AgentDVRCard extends HTMLElement {
             const extracted = this._extractTimestamp(debugRec);
             const parsed = this._parseTimestamp(extracted);
             debugTs = `<div style="padding:8px 16px;font-size:0.75em;color:var(--secondary-text-color);background:var(--secondary-background-color);overflow-x:auto;white-space:pre-wrap;max-height:250px;overflow-y:auto;">` +
-                `<strong>v1.1.0 | Fields (${keys.length}):</strong>\\n${this._escHtml(fieldInfo)}\\n\\n` +
+                `<strong>v1.2.0 | Fields (${keys.length}):</strong>\\n${this._escHtml(fieldInfo)}\\n\\n` +
                 `<strong>Extracted:</strong> ${this._escHtml(JSON.stringify(extracted))}\\n` +
                 `<strong>Parsed:</strong> ${this._escHtml(String(parsed))}</div>`;
         }

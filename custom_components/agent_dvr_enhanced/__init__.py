@@ -175,6 +175,14 @@ class AgentDVREventsApiView(HomeAssistantView):
             _LOGGER.exception("Error fetching events")
             return web.Response(status=502, text="Error fetching events")
 
+        if events:
+            _LOGGER.debug(
+                "Events API: %d events, first event keys=%s, first event=%s",
+                len(events),
+                list(events[0].keys()) if isinstance(events[0], dict) else type(events[0]),
+                events[0],
+            )
+
         return web.json_response(events)
 
 
