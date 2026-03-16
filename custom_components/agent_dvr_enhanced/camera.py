@@ -3,8 +3,9 @@
 import logging
 from typing import Any
 
+from aiohttp import web
+
 from homeassistant.components.camera import Camera
-from homeassistant.components.camera import async_aiohttp_proxy_stream
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
@@ -125,13 +126,21 @@ class AgentDVRCamera(CoordinatorEntity[AgentDVRCoordinator], Camera):
         """Proxy the native MJPEG stream from AgentDVR through HA."""
         session = async_get_clientsession(self.hass)
         mjpeg_url = self.coordinator.client.get_mjpeg_url(self._oid)
-        stream = await session.get(mjpeg_url)
-        return await async_aiohttp_proxy_stream(
-            self.hass,
-            request,
-            stream,
-            stream.content_type,
+
+        response = web.StreamResponse(
+            status=200,
+            headers={"Content-Type": "multipart/x-mixed-replace;boundary=myboundary"},
         )
+        await response.prepare(request)
+
+        try:
+            upstream = await session.get(mjpeg_url)
+            async for chunk in upstream.content.iter_any():
+                await response.write(chunk)
+        except ConnectionResetError:
+            pass
+        finally:
+            return response
 
     # ------------------------------------------------------------------
     # Helpers

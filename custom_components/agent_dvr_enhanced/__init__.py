@@ -33,10 +33,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     hass.data[DOMAIN][entry.entry_id] = coordinator
 
     # Register HTTP proxy views once
-    if not hass.data.get(f"{DOMAIN}_views_registered"):
-        hass.http.register_view(AgentDVRRecordingProxyView())
-        hass.http.register_view(AgentDVRThumbnailProxyView())
-        hass.data[f"{DOMAIN}_views_registered"] = True
+    try:
+        if not hass.data.get(f"{DOMAIN}_views_registered"):
+            hass.http.register_view(AgentDVRRecordingProxyView())
+            hass.http.register_view(AgentDVRThumbnailProxyView())
+            hass.data[f"{DOMAIN}_views_registered"] = True
+    except Exception:
+        _LOGGER.warning("Could not register HTTP proxy views", exc_info=True)
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     return True
