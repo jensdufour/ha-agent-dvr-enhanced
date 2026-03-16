@@ -189,7 +189,7 @@ class AgentDVRCard extends HTMLElement {
                 if (isNaN(ms)) {
                     const dmy = timestamp.match(/(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})[\sT]?(\d{1,2}:\d{2}:?\d{0,2})?\.?.*/);
                     if (dmy) {
-                        ms = new Date(`${dmy[3]}-${dmy[2].padStart(2,'0')}-${dmy[1].padStart(2,'0')}T${dmy[4]||'00:00:00'}`).getTime();
+                        ms = new Date(`${dmy[3]}-${dmy[2].padStart(2, '0')}-${dmy[1].padStart(2, '0')}T${dmy[4] || '00:00:00'}`).getTime();
                     }
                 }
             }
@@ -377,7 +377,7 @@ class AgentDVRCard extends HTMLElement {
       </style>
 
       <div class="card">
-        <div class="header">${this._escHtml(name)} <span style="font-size:0.6em;color:var(--secondary-text-color)">v1.5.4</span></div>
+        <div class="header">${this._escHtml(name)} <span style="font-size:0.6em;color:var(--secondary-text-color)">v1.6.0</span></div>
         <div class="tabs">
           <div class="tab ${this._activeTab === "live" ? "active" : ""}" data-tab="live">
             <svg viewBox="0 0 24 24"><path d="M17 10.5V7c0-.55-.45-1-1-1H4c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h12c.55 0 1-.45 1-1v-3.5l4 4v-11l-4 4z"/></svg>
@@ -549,8 +549,8 @@ class AgentDVRCard extends HTMLElement {
           <div class="tl-item" data-idx="${ev.idx}">
             <div class="tl-thumb-wrap">
               ${thumbUrl
-                  ? `<img class="tl-thumb" data-sign-url="${thumbUrl}" alt="" onerror="this.style.background='#333'" />`
-                  : `<div class="tl-thumb"></div>`}
+                        ? `<img class="tl-thumb" data-sign-url="${thumbUrl}" alt="" onerror="this.style.background='#333'" />`
+                        : `<div class="tl-thumb"></div>`}
               <div class="tl-play-icon">${playIcon}</div>
             </div>
             <div class="tl-body">
