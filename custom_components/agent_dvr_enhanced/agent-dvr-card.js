@@ -1,5 +1,6 @@
 /**
  * Agent DVR Card - Custom Lovelace card for Agent DVR Enhanced
+ * Version: 2026.03.16.3
  * Provides Live, Timeline, and Recordings views.
  */
 
@@ -500,7 +501,7 @@ class AgentDVRCard extends HTMLElement {
       </style>
 
       <div class="card">
-        <div class="header">${this._escHtml(name)}</div>
+        <div class="header">${this._escHtml(name)} <span style="font-size:0.6em;color:var(--secondary-text-color)">v2026.03.16.3</span></div>
         <div class="tabs">
           <div class="tab ${this._activeTab === "live" ? "active" : ""}" data-tab="live">
             <svg viewBox="0 0 24 24"><path d="M17 10.5V7c0-.55-.45-1-1-1H4c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h12c.55 0 1-.45 1-1v-3.5l4 4v-11l-4 4z"/></svg>
@@ -654,6 +655,17 @@ class AgentDVRCard extends HTMLElement {
         return `<div class="recordings-list">${items.join("")}</div>`;
     }
 
+    _safeDateStr(d, method, options) {
+        if (!d) return null;
+        try {
+            const result = d[method](undefined, options);
+            if (result === "Invalid Date") return null;
+            return result;
+        } catch {
+            return null;
+        }
+    }
+
     _renderTimeline() {
         if (this._loading) {
             return '<div class="loading">Loading timeline...</div>';
@@ -681,7 +693,7 @@ class AgentDVRCard extends HTMLElement {
         for (const alert of this._alerts) {
             events.push({
                 type: "alert",
-                timestamp: alert.time || alert.timestamp,
+                timestamp: this._extractTimestamp(alert),
                 label: alert.reason || alert.msg || "Alert",
                 duration: null,
                 idx: -1,
@@ -711,14 +723,12 @@ class AgentDVRCard extends HTMLElement {
         const groups = {};
         for (const ev of events) {
             const d = this._parseTimestamp(ev.timestamp);
-            const key = d
-                ? d.toLocaleDateString(undefined, {
-                    weekday: "long",
-                    year: "numeric",
-                    month: "long",
-                    day: "numeric",
-                })
-                : "Unknown date";
+            const key = this._safeDateStr(d, "toLocaleDateString", {
+                weekday: "long",
+                year: "numeric",
+                month: "long",
+                day: "numeric",
+            }) || "Unknown date";
             if (!groups[key]) groups[key] = [];
             groups[key].push({ ...ev, date: d });
         }
@@ -729,13 +739,11 @@ class AgentDVRCard extends HTMLElement {
             html += `<div class="timeline-date">${this._escHtml(date)}</div>`;
             html += `<div class="timeline-events">`;
             for (const ev of dayEvents) {
-                const timeStr = ev.date
-                    ? ev.date.toLocaleTimeString(undefined, {
-                        hour: "2-digit",
-                        minute: "2-digit",
-                        second: "2-digit",
-                    })
-                    : "--:--:--";
+                const timeStr = this._safeDateStr(ev.date, "toLocaleTimeString", {
+                    hour: "2-digit",
+                    minute: "2-digit",
+                    second: "2-digit",
+                }) || "--:--:--";
                 const dur = ev.duration ? ` (${this._formatDuration(ev.duration)})` : "";
                 const cls = ev.type === "alert" ? "timeline-event alert-event" : "timeline-event";
                 const clickable = ev.idx >= 0 ? `data-idx="${ev.idx}"` : "";

@@ -1,5 +1,6 @@
 """Agent DVR Enhanced integration."""
 
+import hashlib
 import logging
 import os
 import re
@@ -220,10 +221,15 @@ class AgentDVRCardJsView(HomeAssistantView):
         try:
             with open(self._js_path, encoding="utf-8") as fh:
                 content = fh.read()
+            content_hash = hashlib.md5(content.encode()).hexdigest()[:8]
             return web.Response(
                 body=content,
                 content_type="application/javascript",
-                headers={"Cache-Control": "no-cache"},
+                headers={
+                    "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+                    "Pragma": "no-cache",
+                    "ETag": content_hash,
+                },
             )
         except FileNotFoundError:
             return web.Response(status=404, text="Card JS not found")
