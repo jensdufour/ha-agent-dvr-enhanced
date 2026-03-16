@@ -1,6 +1,7 @@
 """API client for AgentDVR."""
 
 import asyncio
+import json
 import logging
 import re
 from typing import Any
@@ -40,14 +41,20 @@ class AgentDVRApiClient:
             async with asyncio.timeout(timeout):
                 resp = await self._session.get(url)
                 resp.raise_for_status()
-                return await resp.json(content_type=None)
+                text = await resp.text()
+                return json.loads(text)
         except asyncio.TimeoutError as err:
             raise AgentDVRConnectionError(
                 "Timeout connecting to AgentDVR"
             ) from err
+        except json.JSONDecodeError as err:
+            _LOGGER.error("Invalid JSON from AgentDVR at %s: %s", url, err)
+            raise AgentDVRApiError(
+                f"Invalid JSON response from {url}"
+            ) from err
         except (aiohttp.ClientError, aiohttp.ClientResponseError) as err:
             raise AgentDVRConnectionError(
-                "Error connecting to AgentDVR"
+                f"Error connecting to AgentDVR at {url}: {err}"
             ) from err
 
     async def _request_bytes(self, path: str, timeout: int = 10) -> bytes:

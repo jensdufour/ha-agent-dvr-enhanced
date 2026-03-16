@@ -44,6 +44,14 @@ class AgentDVRCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             raise UpdateFailed(
                 f"Error communicating with AgentDVR: {err}"
             ) from err
+        except Exception as err:
+            _LOGGER.exception("Unexpected error fetching AgentDVR data")
+            raise UpdateFailed(
+                f"Unexpected error: {err}"
+            ) from err
+
+        _LOGGER.debug("AgentDVR objects response keys: %s", list(objects_data.keys()) if isinstance(objects_data, dict) else type(objects_data))
+        _LOGGER.debug("AgentDVR status response keys: %s", list(status_data.keys()) if isinstance(status_data, dict) else type(status_data))
 
         self.server_info = status_data
         self.devices = objects_data.get("objectList", [])
