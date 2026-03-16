@@ -124,13 +124,22 @@ class AgentDVRCard extends HTMLElement {
         this._render();
 
         try {
-            const resp = await this._hass.callApi(
-                "GET",
-                `agent_dvr_enhanced/events/${info.entryId}/${info.oid}/${info.ot}`
-            );
-            this._recordings = Array.isArray(resp) ? resp : [];
+            const url = `agent_dvr_enhanced/events/${info.entryId}/${info.oid}/${info.ot}`;
+            console.log("[AgentDVR] Fetching recordings:", url);
+            const resp = await this._hass.callApi("GET", url);
+            console.log("[AgentDVR] Response type:", typeof resp, "isArray:", Array.isArray(resp), "length:", resp?.length, "resp:", resp);
+            if (Array.isArray(resp)) {
+                this._recordings = resp;
+            } else if (resp && typeof resp === "object") {
+                // Agent DVR may wrap events in an object
+                const arr = resp.items || resp.events || resp.data || resp.result || resp.recordings || Object.values(resp).find(v => Array.isArray(v));
+                this._recordings = Array.isArray(arr) ? arr : [];
+                console.log("[AgentDVR] Unwrapped from object, keys:", Object.keys(resp), "found:", this._recordings.length);
+            } else {
+                this._recordings = [];
+            }
         } catch (err) {
-            console.error("Error fetching recordings:", err);
+            console.error("[AgentDVR] Error fetching recordings:", err);
             this._error = `Error fetching recordings: ${err.message || err}`;
             this._recordings = [];
         }
@@ -360,7 +369,7 @@ class AgentDVRCard extends HTMLElement {
       </style>
 
       <div class="card">
-        <div class="header">${this._escHtml(name)} <span style="font-size:0.6em;color:var(--secondary-text-color)">v1.5.0</span></div>
+        <div class="header">${this._escHtml(name)} <span style="font-size:0.6em;color:var(--secondary-text-color)">v1.5.1</span></div>
         <div class="tabs">
           <div class="tab ${this._activeTab === "live" ? "active" : ""}" data-tab="live">
             <svg viewBox="0 0 24 24"><path d="M17 10.5V7c0-.55-.45-1-1-1H4c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h12c.55 0 1-.45 1-1v-3.5l4 4v-11l-4 4z"/></svg>
@@ -447,7 +456,16 @@ class AgentDVRCard extends HTMLElement {
       `;
         }
 
-        if (this._recordings.length === 0) return '<div class="empty">No recordings found</div>';
+        if (this._recordings.length === 0) {
+            const info2 = this._getEntryInfo();
+            return `<div class="empty" style="flex-direction:column;gap:8px;text-align:center;padding:16px">
+              <div>No recordings found</div>
+              <div style="font-size:0.7em;color:var(--secondary-text-color);word-break:break-all">
+                entryId: ${info2?.entryId || 'missing'} | oid: ${info2?.oid ?? 'missing'} | ot: ${info2?.ot ?? 'missing'}<br>
+                URL: /api/agent_dvr_enhanced/events/${info2?.entryId || '?'}/${info2?.oid ?? '?'}/${info2?.ot ?? '?'}
+              </div>
+            </div>`;
+        }
 
         const info = this._getEntryInfo();
         const entryId = info ? info.entryId : "";
