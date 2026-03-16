@@ -33,7 +33,7 @@ class AgentDVRCard extends HTMLElement {
         this._hass = hass;
         if (!this._initialized) {
             this._initialized = true;
-            this._render();
+            this._resolveEntryId().then(() => this._render());
         }
         this._updateCameraImage();
     }
@@ -49,27 +49,26 @@ class AgentDVRCard extends HTMLElement {
         const oid = state.attributes.object_id;
         const ot = state.attributes.object_type;
 
-        let entryId = this._config.entry_id || null;
-
-        if (!entryId) {
-            const entities = this._hass.entities
-                ? Object.values(this._hass.entities)
-                : [];
-            const entity = entities.find(
-                (e) => e.entity_id === this._config.camera_entity
-            );
-
-            if (entity && entity.config_entry_id) {
-                entryId = entity.config_entry_id;
-            } else if (entity && entity.unique_id) {
-                const parts = entity.unique_id.split("_");
-                if (parts.length >= 3) {
-                    entryId = parts.slice(0, -2).join("_");
-                }
-            }
-        }
+        let entryId = this._config.entry_id || this._resolvedEntryId || null;
 
         return { entryId, oid, ot };
+    }
+
+    async _resolveEntryId() {
+        if (this._resolvedEntryId || this._config.entry_id) return;
+        if (!this._hass || !this._hass.connection) return;
+
+        try {
+            const result = await this._hass.connection.sendMessagePromise({
+                type: "config/entity_registry/get",
+                entity_id: this._config.camera_entity,
+            });
+            if (result && result.config_entry_id) {
+                this._resolvedEntryId = result.config_entry_id;
+            }
+        } catch (err) {
+            console.error("Error resolving entry ID:", err);
+        }
     }
 
     _updateCameraImage() {
@@ -83,7 +82,7 @@ class AgentDVRCard extends HTMLElement {
         img.src = url;
     }
 
-    _switchTab(tab) {
+    async _switchTab(tab) {
         this._activeTab = tab;
         this._playingRecording = null;
         this._render();
@@ -94,6 +93,8 @@ class AgentDVRCard extends HTMLElement {
         } else {
             this._stopLiveRefresh();
         }
+
+        await this._resolveEntryId();
 
         if (tab === "recordings" && this._recordings.length === 0) {
             this._fetchRecordings();
@@ -122,9 +123,14 @@ class AgentDVRCard extends HTMLElement {
 
     async _fetchRecordings() {
         const info = this._getEntryInfo();
-        if (!info || !info.entryId) return;
+        if (!info || !info.entryId) {
+            this._error = "Could not resolve entry ID for camera";
+            this._render();
+            return;
+        }
 
         this._loading = true;
+        this._error = null;
         this._render();
 
         try {
@@ -135,6 +141,7 @@ class AgentDVRCard extends HTMLElement {
             this._recordings = Array.isArray(resp) ? resp : [];
         } catch (err) {
             console.error("Error fetching recordings:", err);
+            this._error = `Error fetching recordings: ${err.message || err}`;
             this._recordings = [];
         }
 
@@ -549,6 +556,10 @@ class AgentDVRCard extends HTMLElement {
             return '<div class="loading">Loading recordings...</div>';
         }
 
+        if (this._error) {
+            return `<div class="empty" style="color: var(--error-color, #db4437);">${this._escHtml(this._error)}</div>`;
+        }
+
         if (this._playingRecording) {
             return `
         <div class="player-container">
@@ -595,6 +606,10 @@ class AgentDVRCard extends HTMLElement {
     _renderTimeline() {
         if (this._loading) {
             return '<div class="loading">Loading timeline...</div>';
+        }
+
+        if (this._error) {
+            return `<div class="empty" style="color: var(--error-color, #db4437);">${this._escHtml(this._error)}</div>`;
         }
 
         // Combine recordings and alerts, group by day
