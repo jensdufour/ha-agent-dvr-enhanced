@@ -1,6 +1,7 @@
 """Agent DVR Enhanced integration."""
 
 import logging
+import os
 import re
 
 from aiohttp import web
@@ -37,6 +38,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         if not hass.data.get(f"{DOMAIN}_views_registered"):
             hass.http.register_view(AgentDVRRecordingProxyView())
             hass.http.register_view(AgentDVRThumbnailProxyView())
+            hass.http.register_view(AgentDVREventsApiView())
+            hass.http.register_view(AgentDVRAlertsApiView())
+            hass.http.register_static_path(
+                f"/agent_dvr_enhanced/agent-dvr-card.js",
+                os.path.join(os.path.dirname(__file__), "agent-dvr-card.js"),
+                cache_headers=False,
+            )
             hass.data[f"{DOMAIN}_views_registered"] = True
     except Exception:
         _LOGGER.warning("Could not register HTTP proxy views", exc_info=True)
@@ -136,3 +144,63 @@ class AgentDVRThumbnailProxyView(HomeAssistantView):
             return web.Response(status=502, text="Error fetching thumbnail")
 
         return web.Response(body=data, content_type="image/jpeg")
+
+
+class AgentDVREventsApiView(HomeAssistantView):
+    """API view that returns recordings/events as JSON."""
+
+    url = "/api/agent_dvr_enhanced/events/{entry_id}/{oid}/{ot}"
+    name = "api:agent_dvr_enhanced:events"
+    requires_auth = True
+
+    async def get(
+        self, request: web.Request, entry_id: str, oid: str, ot: str
+    ) -> web.Response:
+        """Return events/recordings list for a camera."""
+        hass = request.app["hass"]
+
+        if DOMAIN not in hass.data or entry_id not in hass.data[DOMAIN]:
+            return web.Response(status=404, text="Integration not found")
+
+        try:
+            oid_int = int(oid)
+            ot_int = int(ot)
+        except ValueError:
+            return web.Response(status=400, text="Invalid parameters")
+
+        coordinator: AgentDVRCoordinator = hass.data[DOMAIN][entry_id]
+
+        try:
+            events = await coordinator.client.get_events(oid=oid_int, ot=ot_int)
+        except Exception:
+            _LOGGER.exception("Error fetching events")
+            return web.Response(status=502, text="Error fetching events")
+
+        return web.json_response(events)
+
+
+class AgentDVRAlertsApiView(HomeAssistantView):
+    """API view that returns alerts as JSON."""
+
+    url = "/api/agent_dvr_enhanced/alerts/{entry_id}"
+    name = "api:agent_dvr_enhanced:alerts"
+    requires_auth = True
+
+    async def get(
+        self, request: web.Request, entry_id: str
+    ) -> web.Response:
+        """Return alerts list."""
+        hass = request.app["hass"]
+
+        if DOMAIN not in hass.data or entry_id not in hass.data[DOMAIN]:
+            return web.Response(status=404, text="Integration not found")
+
+        coordinator: AgentDVRCoordinator = hass.data[DOMAIN][entry_id]
+
+        try:
+            alerts = await coordinator.client.get_alerts()
+        except Exception:
+            _LOGGER.exception("Error fetching alerts")
+            return web.Response(status=502, text="Error fetching alerts")
+
+        return web.json_response(alerts)
