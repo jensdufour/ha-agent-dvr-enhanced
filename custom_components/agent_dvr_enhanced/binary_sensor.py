@@ -100,6 +100,10 @@ class AgentDVRMotionSensor(_AgentDVRBinarySensor):
     @property
     def is_on(self) -> bool:
         """Return True when motion is detected."""
+        # Check MQTT instant state first
+        mqtt_val = self.coordinator.get_device_state(self._oid, "detected")
+        if mqtt_val is not False:
+            return mqtt_val
         device = self._get_current_device()
         return device.get("data", {}).get("detected", False)
 
@@ -122,5 +126,9 @@ class AgentDVRAlertSensor(_AgentDVRBinarySensor):
     @property
     def is_on(self) -> bool:
         """Return True when an alert is active."""
+        # Check MQTT instant state first
+        mqtt_val = self.coordinator.get_device_state(self._oid, "alerted")
+        if mqtt_val is not False:
+            return mqtt_val
         device = self._get_current_device()
         return device.get("data", {}).get("alerted", False)

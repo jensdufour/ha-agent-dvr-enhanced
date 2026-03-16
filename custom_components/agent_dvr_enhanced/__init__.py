@@ -34,6 +34,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     hass.data.setdefault(DOMAIN, {})
     hass.data[DOMAIN][entry.entry_id] = coordinator
 
+    # Set up MQTT subscriptions for instant event detection
+    await coordinator.setup_mqtt()
+
     # Register HTTP proxy views once
     try:
         if not hass.data.get(f"{DOMAIN}_views_registered"):
