@@ -147,14 +147,22 @@ class AgentDVRCard extends HTMLElement {
         this._loading = false;
     }
 
-    _playRecording(rec) {
+    async _signUrl(path) {
+        try {
+            const resp = await this._hass.callWS({ type: "auth/sign_path", path });
+            return resp.path;
+        } catch {
+            return path;
+        }
+    }
+
+    async _playRecording(rec) {
         const info = this._getEntryInfo();
         if (!info || !info.entryId) return;
         const fn = rec.fn || rec.filename || "";
-        this._playingRecording = {
-            ...rec,
-            url: `/api/agent_dvr_enhanced/recording/${info.entryId}/${info.oid}/${info.ot}/${fn}`,
-        };
+        const rawUrl = `/api/agent_dvr_enhanced/recording/${info.entryId}/${info.oid}/${info.ot}/${fn}`;
+        const signedUrl = await this._signUrl(rawUrl);
+        this._playingRecording = { ...rec, url: signedUrl };
         this._render();
     }
 
@@ -369,7 +377,7 @@ class AgentDVRCard extends HTMLElement {
       </style>
 
       <div class="card">
-        <div class="header">${this._escHtml(name)} <span style="font-size:0.6em;color:var(--secondary-text-color)">v1.5.3</span></div>
+        <div class="header">${this._escHtml(name)} <span style="font-size:0.6em;color:var(--secondary-text-color)">v1.5.4</span></div>
         <div class="tabs">
           <div class="tab ${this._activeTab === "live" ? "active" : ""}" data-tab="live">
             <svg viewBox="0 0 24 24"><path d="M17 10.5V7c0-.55-.45-1-1-1H4c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h12c.55 0 1-.45 1-1v-3.5l4 4v-11l-4 4z"/></svg>
@@ -541,7 +549,7 @@ class AgentDVRCard extends HTMLElement {
           <div class="tl-item" data-idx="${ev.idx}">
             <div class="tl-thumb-wrap">
               ${thumbUrl
-                  ? `<img class="tl-thumb" src="${thumbUrl}" alt="" loading="lazy" onerror="this.style.background='#333'" />`
+                  ? `<img class="tl-thumb" data-sign-url="${thumbUrl}" alt="" onerror="this.style.background='#333'" />`
                   : `<div class="tl-thumb"></div>`}
               <div class="tl-play-icon">${playIcon}</div>
             </div>
@@ -558,7 +566,21 @@ class AgentDVRCard extends HTMLElement {
             html += `</div>`;
         }
 
+        // After returning HTML, schedule signing of thumbnail URLs
+        setTimeout(() => this._signThumbnails(), 0);
+
         return `<div class="timeline">${html}</div>`;
+    }
+
+    async _signThumbnails() {
+        const imgs = this.shadowRoot.querySelectorAll("img[data-sign-url]");
+        for (const img of imgs) {
+            const url = img.getAttribute("data-sign-url");
+            if (!url) continue;
+            img.removeAttribute("data-sign-url");
+            const signed = await this._signUrl(url);
+            img.src = signed;
+        }
     }
 
     _escHtml(str) {
