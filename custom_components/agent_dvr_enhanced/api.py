@@ -3,14 +3,11 @@
 import asyncio
 import json
 import logging
-import re
 from typing import Any
 
 import aiohttp
 
 _LOGGER = logging.getLogger(__name__)
-
-SAFE_FILENAME = re.compile(r"^[a-zA-Z0-9_\-\.]+$")
 
 
 class AgentDVRApiError(Exception):
@@ -109,32 +106,21 @@ class AgentDVRApiClient:
         all_events: list[dict[str, Any]] = []
         while True:
             data = await self._request_json(path)
-            _LOGGER.debug(
-                "get_events raw response type=%s keys=%s len=%s",
-                type(data).__name__,
-                list(data.keys()) if isinstance(data, dict) else "N/A",
-                len(data) if isinstance(data, (list, dict)) else "N/A",
-            )
-            # Agent DVR may return a bare list or an object wrapping the list
             events_list: list[dict[str, Any]] | None = None
             if isinstance(data, list):
                 events_list = data
             elif isinstance(data, dict):
-                # Try common wrapper keys
                 for key in ("items", "events", "data", "result", "recordings", "objectList"):
                     if key in data and isinstance(data[key], list):
                         events_list = data[key]
-                        _LOGGER.debug("get_events: unwrapped from key '%s'", key)
                         break
                 if events_list is None:
-                    # Try first list value in the dict
                     for key, val in data.items():
                         if isinstance(val, list):
                             events_list = val
-                            _LOGGER.debug("get_events: unwrapped from key '%s' (auto)", key)
                             break
             if events_list is None:
-                _LOGGER.warning("get_events: unexpected response format, data=%s", str(data)[:500])
+                _LOGGER.warning("get_events: unexpected response format")
                 break
             all_events.extend(events_list)
             if len(events_list) < 400:
@@ -145,7 +131,6 @@ class AgentDVRApiClient:
             sep = "&" if base_query else ""
             path = f"q/getEvents?{base_query}{sep}enddate={last_ts}"
 
-        _LOGGER.debug("get_events: returning %d events total", len(all_events))
         return all_events
 
     async def get_still_image(self, oid: int) -> bytes:

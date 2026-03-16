@@ -1,9 +1,3 @@
-/**
- * Agent DVR Card - Custom Lovelace card for Agent DVR Enhanced
- * Version: 1.5.0
- * Provides Live and Recordings views.
- */
-
 class AgentDVRCard extends HTMLElement {
     static get properties() {
         return {
@@ -63,9 +57,7 @@ class AgentDVRCard extends HTMLElement {
             if (result && result.config_entry_id) {
                 this._resolvedEntryId = result.config_entry_id;
             }
-        } catch (err) {
-            console.error("Error resolving entry ID:", err);
-        }
+        } catch { /* entry resolution failed, will retry */ }
     }
 
     _updateCameraImage() {
@@ -125,21 +117,16 @@ class AgentDVRCard extends HTMLElement {
 
         try {
             const url = `agent_dvr_enhanced/events/${info.entryId}/${info.oid}/${info.ot}`;
-            console.log("[AgentDVR] Fetching recordings:", url);
             const resp = await this._hass.callApi("GET", url);
-            console.log("[AgentDVR] Response type:", typeof resp, "isArray:", Array.isArray(resp), "length:", resp?.length, "resp:", resp);
             if (Array.isArray(resp)) {
                 this._recordings = resp;
             } else if (resp && typeof resp === "object") {
-                // Agent DVR may wrap events in an object
                 const arr = resp.items || resp.events || resp.data || resp.result || resp.recordings || Object.values(resp).find(v => Array.isArray(v));
                 this._recordings = Array.isArray(arr) ? arr : [];
-                console.log("[AgentDVR] Unwrapped from object, keys:", Object.keys(resp), "found:", this._recordings.length);
             } else {
                 this._recordings = [];
             }
         } catch (err) {
-            console.error("[AgentDVR] Error fetching recordings:", err);
             this._error = `Error fetching recordings: ${err.message || err}`;
             this._recordings = [];
         }
@@ -148,12 +135,8 @@ class AgentDVRCard extends HTMLElement {
     }
 
     async _signUrl(path) {
-        try {
-            const resp = await this._hass.callWS({ type: "auth/sign_path", path });
-            return resp.path;
-        } catch {
-            return path;
-        }
+        const resp = await this._hass.callWS({ type: "auth/sign_path", path });
+        return resp.path;
     }
 
     async _playRecording(rec) {
@@ -408,29 +391,6 @@ class AgentDVRCard extends HTMLElement {
                     this._stopPlayback();
                     return;
                 }
-                if (e.target.id === "debug-btn") {
-                    const info = this._getEntryInfo();
-                    if (!info || !info.entryId) return;
-                    e.target.textContent = "Running...";
-                    e.target.disabled = true;
-                    try {
-                        const resp = await this._hass.callApi("GET",
-                            `agent_dvr_enhanced/debug/${info.entryId}/${info.oid}/${info.ot}`);
-                        const out = this.shadowRoot.querySelector("#debug-output");
-                        if (out) {
-                            out.style.display = "block";
-                            out.textContent = JSON.stringify(resp, null, 2);
-                        }
-                    } catch (err) {
-                        const out = this.shadowRoot.querySelector("#debug-output");
-                        if (out) {
-                            out.style.display = "block";
-                            out.textContent = "Error: " + (err.message || err);
-                        }
-                    }
-                    e.target.textContent = "Run API Diagnostics";
-                    e.target.disabled = false;
-                }
             });
         }
 
@@ -482,15 +442,7 @@ class AgentDVRCard extends HTMLElement {
         }
 
         if (this._recordings.length === 0) {
-            const info2 = this._getEntryInfo();
-            return `<div class="empty" style="flex-direction:column;gap:8px;text-align:center;padding:16px">
-              <div>No recordings found</div>
-              <div style="font-size:0.7em;color:var(--secondary-text-color);word-break:break-all">
-                entryId: ${info2?.entryId || 'missing'} | oid: ${info2?.oid ?? 'missing'} | ot: ${info2?.ot ?? 'missing'}
-              </div>
-              <button id="debug-btn" style="margin-top:8px;padding:6px 16px;cursor:pointer;border-radius:6px;border:1px solid var(--divider-color);background:var(--secondary-background-color)">Run API Diagnostics</button>
-              <pre id="debug-output" style="font-size:0.65em;text-align:left;max-height:400px;overflow:auto;white-space:pre-wrap;word-break:break-all;display:none;padding:8px;background:var(--secondary-background-color);border-radius:4px"></pre>
-            </div>`;
+            return '<div class="empty">No recordings found</div>';
         }
 
         const info = this._getEntryInfo();

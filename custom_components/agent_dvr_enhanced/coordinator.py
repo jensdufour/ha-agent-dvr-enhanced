@@ -64,7 +64,7 @@ class AgentDVRCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     self.hass, topic, self._handle_mqtt_message, qos=0
                 )
                 self._mqtt_unsubscribes.append(unsub)
-                _LOGGER.info("Subscribed to MQTT topic: %s", topic)
+                _LOGGER.debug("Subscribed to MQTT topic: %s", topic)
             except Exception:
                 _LOGGER.warning("Failed to subscribe to MQTT topic: %s", topic, exc_info=True)
 
@@ -82,20 +82,14 @@ class AgentDVRCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         device_name = parts[2].lower()
         event_type = parts[3].lower()
 
-        _LOGGER.debug(
-            "MQTT message: topic=%s payload=%s device=%s event=%s",
-            topic, payload, device_name, event_type,
-        )
-
-        # Find the device by name
         device = self._name_to_device.get(device_name)
         if not device:
-            # Try to rebuild the mapping
             self._rebuild_name_map()
             device = self._name_to_device.get(device_name)
             if not device:
-                _LOGGER.debug("No device found for MQTT name '%s'", device_name)
                 return
+
+        _LOGGER.debug("MQTT: %s event=%s payload=%s", device_name, event_type, payload)
 
         oid = int(device.get("id", 0))
         if oid not in self.mqtt_state:
@@ -107,22 +101,17 @@ class AgentDVRCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         if event_type == "alert":
             self.mqtt_state[oid]["alerted"] = is_true
             self.mqtt_state[oid]["detected"] = is_true
-            _LOGGER.debug("MQTT: Device %s (oid=%d) alert=%s", device_name, oid, is_true)
         elif event_type == "motion":
             self.mqtt_state[oid]["detected"] = is_true
-            _LOGGER.debug("MQTT: Device %s (oid=%d) motion=%s", device_name, oid, is_true)
         elif event_type == "motion_stopped":
             self.mqtt_state[oid]["detected"] = False
-            _LOGGER.debug("MQTT: Device %s (oid=%d) motion_stopped", device_name, oid)
         elif event_type == "alert_stopped":
             self.mqtt_state[oid]["alerted"] = False
-            _LOGGER.debug("MQTT: Device %s (oid=%d) alert_stopped", device_name, oid)
         elif event_type == "recording":
             self.mqtt_state[oid]["recording"] = is_true
         elif event_type == "recording_stopped":
             self.mqtt_state[oid]["recording"] = False
         else:
-            _LOGGER.debug("MQTT: Unhandled event type '%s' for %s", event_type, device_name)
             return
 
         # Trigger an immediate coordinator update to push state to entities
