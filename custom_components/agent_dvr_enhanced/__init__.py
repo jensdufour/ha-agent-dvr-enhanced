@@ -36,15 +36,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # Register HTTP proxy views once
     try:
         if not hass.data.get(f"{DOMAIN}_views_registered"):
+            js_path = os.path.join(os.path.dirname(__file__), "agent-dvr-card.js")
             hass.http.register_view(AgentDVRRecordingProxyView())
             hass.http.register_view(AgentDVRThumbnailProxyView())
             hass.http.register_view(AgentDVREventsApiView())
             hass.http.register_view(AgentDVRAlertsApiView())
-            hass.http.register_static_path(
-                f"/agent_dvr_enhanced/agent-dvr-card.js",
-                os.path.join(os.path.dirname(__file__), "agent-dvr-card.js"),
-                cache_headers=False,
-            )
+            hass.http.register_view(AgentDVRCardJsView(js_path))
             hass.data[f"{DOMAIN}_views_registered"] = True
     except Exception:
         _LOGGER.warning("Could not register HTTP proxy views", exc_info=True)
@@ -204,3 +201,28 @@ class AgentDVRAlertsApiView(HomeAssistantView):
             return web.Response(status=502, text="Error fetching alerts")
 
         return web.json_response(alerts)
+
+
+class AgentDVRCardJsView(HomeAssistantView):
+    """Serve the custom card JavaScript file."""
+
+    url = "/agent_dvr_enhanced/agent-dvr-card.js"
+    name = "agent_dvr_enhanced:card_js"
+    requires_auth = False
+
+    def __init__(self, js_path: str) -> None:
+        """Initialize with path to JS file."""
+        self._js_path = js_path
+
+    async def get(self, request: web.Request) -> web.Response:
+        """Serve the JS file."""
+        try:
+            with open(self._js_path, encoding="utf-8") as fh:
+                content = fh.read()
+            return web.Response(
+                body=content,
+                content_type="application/javascript",
+                headers={"Cache-Control": "no-cache"},
+            )
+        except FileNotFoundError:
+            return web.Response(status=404, text="Card JS not found")

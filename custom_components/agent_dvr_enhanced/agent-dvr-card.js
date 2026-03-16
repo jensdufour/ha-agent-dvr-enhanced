@@ -48,26 +48,25 @@ class AgentDVRCard extends HTMLElement {
     if (!state) return null;
     const oid = state.attributes.object_id;
     const ot = state.attributes.object_type;
-    // Extract entry_id from unique_id pattern: {entry_id}_{oid}_{ot}
-    // We'll use the entity registry data if available, or fall back to finding it
-    // For now, iterate coordinator data
-    const entities = Object.values(this._hass.entities || {});
-    const entity = entities.find(
-      (e) => e.entity_id === this._config.camera_entity
-    );
 
-    let entryId = null;
-    if (entity && entity.unique_id) {
-      // unique_id format: {entry_id}_{oid}_{ot}
-      const parts = entity.unique_id.split("_");
-      if (parts.length >= 3) {
-        entryId = parts.slice(0, -2).join("_");
+    let entryId = this._config.entry_id || null;
+
+    if (!entryId) {
+      const entities = this._hass.entities
+        ? Object.values(this._hass.entities)
+        : [];
+      const entity = entities.find(
+        (e) => e.entity_id === this._config.camera_entity
+      );
+
+      if (entity && entity.config_entry_id) {
+        entryId = entity.config_entry_id;
+      } else if (entity && entity.unique_id) {
+        const parts = entity.unique_id.split("_");
+        if (parts.length >= 3) {
+          entryId = parts.slice(0, -2).join("_");
+        }
       }
-    }
-
-    // Fallback: try config_entry_id from entity
-    if (!entryId && entity && entity.config_entry_id) {
-      entryId = entity.config_entry_id;
     }
 
     return { entryId, oid, ot };
@@ -695,10 +694,6 @@ class AgentDVRCard extends HTMLElement {
 
   getCardSize() {
     return 5;
-  }
-
-  static getConfigElement() {
-    return document.createElement("agent-dvr-card-editor");
   }
 
   static getStubConfig() {
