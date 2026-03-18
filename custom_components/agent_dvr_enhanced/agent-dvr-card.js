@@ -281,8 +281,8 @@ class AgentDVRCard extends HTMLElement {
         .content { position: relative; }
 
         /* Live */
-        .live-container { position: relative; width: 100%; background: #000; }
-        .live-container img { display: block; width: 100%; height: auto; }
+        .live-container { position: relative; width: 100%; background: #000; overflow: hidden; aspect-ratio: 16/9; }
+        .live-container img { display: block; width: 100%; height: 100%; object-fit: cover; }
         .status-bar {
           display: flex; gap: 12px; padding: 8px 16px;
           font-size: 0.8em; color: var(--secondary-text-color);
@@ -297,8 +297,8 @@ class AgentDVRCard extends HTMLElement {
         .status-dot.alert { background: #f44336; }
 
         /* Player */
-        .player-container { position: relative; background: #000; line-height: 0; }
-        .player-container video { display: block; width: 100%; height: auto; background: #000; }
+        .player-container { position: relative; background: #000; line-height: 0; overflow: hidden; aspect-ratio: 16/9; }
+        .player-container video { display: block; width: 100%; height: 100%; object-fit: cover; background: #000; }
         .player-close {
           position: absolute; top: 8px; right: 8px;
           background: rgba(0,0,0,0.6); color: #fff; border: none;
@@ -328,7 +328,7 @@ class AgentDVRCard extends HTMLElement {
           object-fit: cover; background: #222; flex-shrink: 0;
         }
         .tl-play-icon {
-          position: absolute; width: 96px; height: 54px;
+          position: absolute; top: 0; left: 0; width: 96px; height: 54px;
           display: flex; align-items: center; justify-content: center;
           pointer-events: none;
         }
@@ -336,7 +336,7 @@ class AgentDVRCard extends HTMLElement {
           width: 28px; height: 28px; fill: rgba(255,255,255,0.85);
           filter: drop-shadow(0 1px 3px rgba(0,0,0,0.5));
         }
-        .tl-thumb-wrap { position: relative; flex-shrink: 0; }
+        .tl-thumb-wrap { position: relative; flex-shrink: 0; width: 96px; height: 54px; }
         .tl-body { flex: 1; min-width: 0; }
         .tl-time { font-size: 0.85em; font-weight: 600; }
         .tl-meta {
