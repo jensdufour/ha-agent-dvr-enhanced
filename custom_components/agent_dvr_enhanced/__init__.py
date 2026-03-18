@@ -44,6 +44,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             hass.http.register_view(AgentDVRThumbnailProxyView())
             hass.http.register_view(AgentDVREventsApiView())
             hass.http.register_view(AgentDVRAlertsApiView())
+            hass.http.register_view(AgentDVRLatestRecordingView())
             hass.http.register_view(AgentDVRCardJsView(js_path))
             hass.data[f"{DOMAIN}_views_registered"] = True
     except Exception:
@@ -235,6 +236,50 @@ class AgentDVRAlertsApiView(HomeAssistantView):
             return web.Response(status=502, text="Error fetching alerts")
 
         return web.json_response(alerts)
+
+
+class AgentDVRLatestRecordingView(HomeAssistantView):
+    """Redirect to the most recent recording for a camera."""
+
+    url = "/api/agent_dvr_enhanced/latest/{entry_id}/{oid}/{ot}"
+    name = "api:agent_dvr_enhanced:latest"
+    requires_auth = True
+
+    async def get(
+        self, request: web.Request, entry_id: str, oid: str, ot: str
+    ) -> web.Response:
+        """Resolve the latest recording and redirect to the proxy URL."""
+        hass = request.app["hass"]
+
+        if DOMAIN not in hass.data or entry_id not in hass.data[DOMAIN]:
+            return web.Response(status=404, text="Integration not found")
+
+        try:
+            oid_int = int(oid)
+            ot_int = int(ot)
+        except ValueError:
+            return web.Response(status=400, text="Invalid parameters")
+
+        coordinator: AgentDVRCoordinator = hass.data[DOMAIN][entry_id]
+
+        try:
+            events = await coordinator.client.get_events(oid=oid_int, ot=ot_int)
+        except Exception:
+            _LOGGER.exception("Error fetching events for latest recording")
+            return web.Response(status=502, text="Error fetching events")
+
+        if not events:
+            return web.Response(status=404, text="No recordings found")
+
+        latest = events[0]
+        filename = latest.get("fn") or latest.get("filename", "")
+        if not filename:
+            return web.Response(status=404, text="No recording filename found")
+
+        redirect_url = (
+            f"/api/agent_dvr_enhanced/recording/{entry_id}/{oid}/{ot}/{filename}"
+        )
+        raise web.HTTPFound(redirect_url)
 
 
 class AgentDVRCardJsView(HomeAssistantView):

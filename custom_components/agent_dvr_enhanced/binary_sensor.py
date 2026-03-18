@@ -76,6 +76,16 @@ class _AgentDVRBinarySensor(
             },
         )
 
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Expose identifiers needed for recording URLs."""
+        return {
+            "entry_id": self._entry.entry_id,
+            "object_id": self._oid,
+            "object_type": self._ot,
+            "latest_recording_url": f"/api/agent_dvr_enhanced/latest/{self._entry.entry_id}/{self._oid}/{self._ot}",
+        }
+
     def _get_current_device(self) -> dict[str, Any]:
         """Return the freshest device data from the coordinator."""
         if self.coordinator.data:
