@@ -27,9 +27,8 @@ class AgentDVRCard extends HTMLElement {
         this._hass = hass;
         if (!this._initialized) {
             this._initialized = true;
-            this._resolveEntryId().then(() => this._render());
+            this._resolveEntryId().then(() => this._render()).then(() => this._startMjpegStream());
         }
-        this._updateCameraImage();
     }
 
     get hass() {
@@ -61,13 +60,7 @@ class AgentDVRCard extends HTMLElement {
     }
 
     _updateCameraImage() {
-        if (this._activeTab !== "live") return;
-        const img = this.shadowRoot.querySelector("#live-image");
-        if (!img || !this._hass) return;
-        const state = this._hass.states[this._config.camera_entity];
-        if (!state) return;
-        const token = state.attributes.access_token;
-        img.src = `/api/camera_proxy/${this._config.camera_entity}?token=${token}&t=${Date.now()}`;
+        // No-op: MJPEG stream updates continuously
     }
 
     async _switchTab(tab) {
@@ -76,12 +69,11 @@ class AgentDVRCard extends HTMLElement {
 
         if (tab === "live") {
             this._render();
-            this._updateCameraImage();
-            this._startLiveRefresh();
+            await this._startMjpegStream();
             return;
         }
 
-        this._stopLiveRefresh();
+        this._stopMjpegStream();
         await this._resolveEntryId();
 
         if (tab === "recordings") {
@@ -91,16 +83,27 @@ class AgentDVRCard extends HTMLElement {
         this._render();
     }
 
+    async _startMjpegStream() {
+        this._stopMjpegStream();
+        const img = this.shadowRoot.querySelector("#live-image");
+        if (!img || !this._hass) return;
+        const streamPath = `/api/camera_proxy_stream/${this._config.camera_entity}`;
+        const signedUrl = await this._signUrl(streamPath);
+        img.src = signedUrl;
+    }
+
+    _stopMjpegStream() {
+        const img = this.shadowRoot.querySelector("#live-image");
+        if (img) img.src = "";
+    }
+
     _startLiveRefresh() {
-        this._stopLiveRefresh();
-        this._refreshInterval = setInterval(() => this._updateCameraImage(), 1000);
+        // MJPEG stream is continuous, no polling needed
     }
 
     _stopLiveRefresh() {
-        if (this._refreshInterval) {
-            clearInterval(this._refreshInterval);
-            this._refreshInterval = null;
-        }
+        // MJPEG stream is stopped by clearing src
+        this._stopMjpegStream();
     }
 
     async _fetchRecordings() {
@@ -417,7 +420,7 @@ class AgentDVRCard extends HTMLElement {
         }
 
         if (this._activeTab === "live") {
-            this._startLiveRefresh();
+            this._startMjpegStream();
         }
     }
 
@@ -432,15 +435,13 @@ class AgentDVRCard extends HTMLElement {
     _renderLive(state) {
         if (!state) return '<div class="empty">Camera unavailable</div>';
 
-        const token = state.attributes.access_token;
-        const imgUrl = `/api/camera_proxy/${this._config.camera_entity}?token=${token}`;
         const isRecording = state.attributes.recording || false;
         const detected = state.attributes.detected || false;
         const connected = state.attributes.connected !== false;
 
         return `
       <div class="live-container">
-        <img id="live-image" src="${imgUrl}" alt="Live view" />
+        <img id="live-image" src="" alt="Live view" />
       </div>
       <div class="status-bar">
         <span><span class="status-dot ${connected ? "on" : "off"}"></span>${connected ? "Connected" : "Disconnected"}</span>
