@@ -297,8 +297,8 @@ class AgentDVRCard extends HTMLElement {
         .status-dot.alert { background: #f44336; }
 
         /* Player */
-        .player-container { position: relative; background: #000; }
-        .player-container video { display: block; width: 100%; }
+        .player-container { position: relative; background: #000; line-height: 0; }
+        .player-container video { display: block; width: 100%; height: auto; background: #000; }
         .player-close {
           position: absolute; top: 8px; right: 8px;
           background: rgba(0,0,0,0.6); color: #fff; border: none;
@@ -450,12 +450,16 @@ class AgentDVRCard extends HTMLElement {
         const oid = info ? info.oid : "";
         const ot = info ? info.ot : "";
 
-        // Build events with parsed dates
-        const events = this._recordings.map((rec, idx) => {
-            const ts = this._extractTimestamp(rec);
-            const d = this._parseTimestamp(ts);
-            return { rec, idx, date: d, ts };
-        });
+        // Filter out recordings with no filename and build events with parsed dates
+        const events = this._recordings
+            .map((rec, idx) => {
+                const fn = rec.fn || rec.filename || "";
+                if (!fn) return null;
+                const ts = this._extractTimestamp(rec);
+                const d = this._parseTimestamp(ts);
+                return { rec, idx, date: d, ts };
+            })
+            .filter(Boolean);
 
         // Sort newest first
         events.sort((a, b) => {
