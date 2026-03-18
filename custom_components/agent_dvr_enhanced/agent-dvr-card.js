@@ -298,7 +298,7 @@ class AgentDVRCard extends HTMLElement {
 
         /* Player */
         .player-container { position: relative; background: #000; }
-        .player-container video { display: block; width: 100%; max-height: 400px; }
+        .player-container video { display: block; width: 100%; }
         .player-close {
           position: absolute; top: 8px; right: 8px;
           background: rgba(0,0,0,0.6); color: #fff; border: none;
