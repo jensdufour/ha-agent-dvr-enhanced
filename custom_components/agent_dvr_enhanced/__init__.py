@@ -62,7 +62,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
 
 class AgentDVRRecordingProxyView(HomeAssistantView):
-    """Proxy view that streams AgentDVR recordings through HA."""
+    """Proxy view that serves AgentDVR recordings with HTTP Range support."""
 
     url = "/api/agent_dvr_enhanced/recording/{entry_id}/{oid}/{ot}/{filename:.+}"
     name = "api:agent_dvr_enhanced:recording"
@@ -70,8 +70,8 @@ class AgentDVRRecordingProxyView(HomeAssistantView):
 
     async def get(
         self, request: web.Request, entry_id: str, oid: str, ot: str, filename: str
-    ) -> web.StreamResponse:
-        """Stream a recording from AgentDVR."""
+    ) -> web.Response:
+        """Serve a recording from AgentDVR with Range request support."""
         hass = request.app["hass"]
 
         if DOMAIN not in hass.data or entry_id not in hass.data[DOMAIN]:
@@ -89,26 +89,52 @@ class AgentDVRRecordingProxyView(HomeAssistantView):
         coordinator: AgentDVRCoordinator = hass.data[DOMAIN][entry_id]
 
         try:
-            upstream = await coordinator.client.stream_recording(
+            data = await coordinator.client.get_recording_bytes(
                 oid_int, ot_int, filename
             )
         except Exception:
             _LOGGER.exception("Error fetching recording %s", filename)
             return web.Response(status=502, text="Error fetching recording")
 
-        response = web.StreamResponse()
-        response.content_type = upstream.content_type or "video/mp4"
-        if upstream.content_length:
-            response.content_length = upstream.content_length
-        await response.prepare(request)
+        total = len(data)
+        content_type = "video/mp4"
+        if filename.lower().endswith(".mkv"):
+            content_type = "video/x-matroska"
+        elif filename.lower().endswith(".webm"):
+            content_type = "video/webm"
 
-        try:
-            async for chunk in upstream.content.iter_chunked(65536):
-                await response.write(chunk)
-        finally:
-            upstream.close()
+        range_header = request.headers.get("Range")
+        if range_header:
+            range_match = re.match(r"bytes=(\d+)-(\d*)", range_header)
+            if range_match:
+                start = int(range_match.group(1))
+                end = int(range_match.group(2)) if range_match.group(2) else total - 1
+                end = min(end, total - 1)
+                if start >= total:
+                    return web.Response(
+                        status=416,
+                        headers={"Content-Range": f"bytes */{total}"},
+                    )
+                return web.Response(
+                    body=data[start : end + 1],
+                    status=206,
+                    content_type=content_type,
+                    headers={
+                        "Content-Range": f"bytes {start}-{end}/{total}",
+                        "Accept-Ranges": "bytes",
+                        "Content-Length": str(end - start + 1),
+                    },
+                )
 
-        return response
+        return web.Response(
+            body=data,
+            status=200,
+            content_type=content_type,
+            headers={
+                "Accept-Ranges": "bytes",
+                "Content-Length": str(total),
+            },
+        )
 
 
 class AgentDVRThumbnailProxyView(HomeAssistantView):

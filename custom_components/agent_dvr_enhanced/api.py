@@ -147,16 +147,24 @@ class AgentDVRApiClient:
         """Get current alerts."""
         return await self._request_json("alerts.json")
 
-    async def stream_recording(
-        self, oid: int, ot: int, filename: str
-    ) -> aiohttp.ClientResponse:
-        """Get a streaming response for a recording file."""
-        url = (
-            f"{self._host}/streamFile.cgi?oid={oid}&ot={ot}&fn={filename}"
-        )
-        resp = await self._session.get(url)
-        resp.raise_for_status()
-        return resp
+    async def get_recording_bytes(
+        self, oid: int, ot: int, filename: str, timeout: int = 120
+    ) -> bytes:
+        """Download a full recording file as bytes."""
+        url = f"{self._host}/streamFile.cgi?oid={oid}&ot={ot}&fn={filename}"
+        try:
+            async with asyncio.timeout(timeout):
+                resp = await self._session.get(url)
+                resp.raise_for_status()
+                return await resp.read()
+        except asyncio.TimeoutError as err:
+            raise AgentDVRConnectionError(
+                "Timeout downloading recording"
+            ) from err
+        except (aiohttp.ClientError, aiohttp.ClientResponseError) as err:
+            raise AgentDVRConnectionError(
+                f"Error downloading recording: {err}"
+            ) from err
 
     def get_mjpeg_url(self, oid: int) -> str:
         """Get the MJPEG stream URL for a camera."""
