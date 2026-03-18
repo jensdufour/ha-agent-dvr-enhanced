@@ -292,8 +292,11 @@ class AgentDVRCard extends HTMLElement {
           background: #000; z-index: 9999; display: flex;
           align-items: center; justify-content: center; cursor: pointer;
         }
-        .fullscreen-overlay img {
-          max-width: 100%; max-height: 100%; object-fit: contain;
+        .fullscreen-overlay .fullscreen-frame {
+          width: 100vw; aspect-ratio: 16/9; max-height: 100vh; overflow: hidden;
+        }
+        .fullscreen-overlay .fullscreen-frame img {
+          display: block; width: 100%; height: 100%; object-fit: cover;
         }
         .fullscreen-close {
           position: absolute; top: 16px; right: 16px;
@@ -568,7 +571,9 @@ class AgentDVRCard extends HTMLElement {
         const overlay = document.createElement("div");
         overlay.className = "fullscreen-overlay";
 
-        // Use MJPEG stream for fullscreen - native resolution, no white padding
+        const frame = document.createElement("div");
+        frame.className = "fullscreen-frame";
+
         const streamPath = `/api/camera_proxy_stream/${this._config.camera_entity}`;
         const signedUrl = await this._signUrl(streamPath);
 
@@ -576,11 +581,13 @@ class AgentDVRCard extends HTMLElement {
         img.src = signedUrl;
         img.alt = "Live view";
 
+        frame.appendChild(img);
+
         const closeBtn = document.createElement("button");
         closeBtn.className = "fullscreen-close";
         closeBtn.innerHTML = "&times;";
 
-        overlay.appendChild(img);
+        overlay.appendChild(frame);
         overlay.appendChild(closeBtn);
         this.shadowRoot.appendChild(overlay);
 
