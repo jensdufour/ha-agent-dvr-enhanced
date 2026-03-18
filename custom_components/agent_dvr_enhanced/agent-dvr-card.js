@@ -283,7 +283,22 @@ class AgentDVRCard extends HTMLElement {
         /* Live */
         .live-container { position: relative; width: 100%; background: #000; overflow: hidden; aspect-ratio: 16/9; }
         .live-container img { display: block; width: 100%; height: 100%; object-fit: cover; }
-        .status-bar {
+        /* Fullscreen overlay */
+        .fullscreen-overlay {
+          position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+          background: #000; z-index: 9999; display: flex;
+          align-items: center; justify-content: center; cursor: pointer;
+        }
+        .fullscreen-overlay img {
+          max-width: 100%; max-height: 100%; object-fit: contain;
+        }
+        .fullscreen-close {
+          position: absolute; top: 16px; right: 16px;
+          background: rgba(0,0,0,0.6); color: #fff; border: none;
+          border-radius: 50%; width: 40px; height: 40px; cursor: pointer;
+          font-size: 22px; display: flex; align-items: center; justify-content: center;
+          z-index: 10000;
+        }        .status-bar {
           display: flex; gap: 12px; padding: 8px 16px;
           font-size: 0.8em; color: var(--secondary-text-color);
           background: var(--secondary-background-color, #f5f5f5);
@@ -378,6 +393,13 @@ class AgentDVRCard extends HTMLElement {
         const content = this.shadowRoot.querySelector("#content");
         if (content) {
             content.addEventListener("click", async (e) => {
+                // Live view fullscreen toggle
+                const liveContainer = e.target.closest(".live-container");
+                if (liveContainer && !this.shadowRoot.querySelector(".fullscreen-overlay")) {
+                    this._openFullscreen();
+                    return;
+                }
+
                 const item = e.target.closest(".tl-item");
                 if (item) {
                     const idx = parseInt(item.dataset.idx, 10);
@@ -539,8 +561,49 @@ class AgentDVRCard extends HTMLElement {
         return div.innerHTML;
     }
 
+    _openFullscreen() {
+        const liveImg = this.shadowRoot.querySelector("#live-image");
+        if (!liveImg) return;
+
+        const overlay = document.createElement("div");
+        overlay.className = "fullscreen-overlay";
+
+        const img = document.createElement("img");
+        img.src = liveImg.src;
+        img.alt = "Live view";
+
+        const closeBtn = document.createElement("button");
+        closeBtn.className = "fullscreen-close";
+        closeBtn.innerHTML = "&times;";
+
+        overlay.appendChild(img);
+        overlay.appendChild(closeBtn);
+        this.shadowRoot.appendChild(overlay);
+
+        // Keep refreshing the fullscreen image
+        this._fullscreenInterval = setInterval(() => {
+            const srcImg = this.shadowRoot.querySelector("#live-image");
+            if (srcImg) img.src = srcImg.src;
+        }, 1000);
+
+        const close = () => {
+            if (this._fullscreenInterval) {
+                clearInterval(this._fullscreenInterval);
+                this._fullscreenInterval = null;
+            }
+            overlay.remove();
+        };
+
+        overlay.addEventListener("click", close);
+        closeBtn.addEventListener("click", (e) => { e.stopPropagation(); close(); });
+    }
+
     disconnectedCallback() {
         this._stopLiveRefresh();
+        if (this._fullscreenInterval) {
+            clearInterval(this._fullscreenInterval);
+            this._fullscreenInterval = null;
+        }
     }
 
     getCardSize() {
