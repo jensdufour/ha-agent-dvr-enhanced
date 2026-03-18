@@ -125,7 +125,7 @@ class AgentDVRCamera(CoordinatorEntity[AgentDVRCoordinator], Camera):
     async def handle_async_mjpeg_stream(self, request):
         """Proxy the native MJPEG stream from AgentDVR through HA."""
         session = async_get_clientsession(self.hass)
-        mjpeg_url = self.coordinator.client.get_mjpeg_url(self._oid)
+        mjpeg_url = self.coordinator.client.get_mjpeg_url(self._oid, quality=100)
 
         response = web.StreamResponse(
             status=200,

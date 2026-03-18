@@ -166,9 +166,12 @@ class AgentDVRApiClient:
                 f"Error downloading recording: {err}"
             ) from err
 
-    def get_mjpeg_url(self, oid: int) -> str:
+    def get_mjpeg_url(self, oid: int, quality: int = 100, size: str | None = None) -> str:
         """Get the MJPEG stream URL for a camera."""
-        return f"{self._host}/video.mjpg?oid={oid}"
+        url = f"{self._host}/video.mjpg?oid={oid}&q={quality}"
+        if size:
+            url += f"&size={size}"
+        return url
 
     def get_recording_url(self, oid: int, ot: int, filename: str) -> str:
         """Get the direct URL to stream a recording."""
