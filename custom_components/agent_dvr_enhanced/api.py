@@ -135,7 +135,7 @@ class AgentDVRApiClient:
 
     async def get_still_image(self, oid: int) -> bytes:
         """Get a still JPEG image from a camera."""
-        return await self._request_bytes(f"grab.jpg?oid={oid}")
+        return await self._request_bytes(f"grab.jpg?oid={oid}&size=1920x1080&maintainAR=true&backColor=0,0,0")
 
     async def get_thumbnail(self, oid: int, filename: str) -> bytes:
         """Get a thumbnail for a recording."""
@@ -166,12 +166,9 @@ class AgentDVRApiClient:
                 f"Error downloading recording: {err}"
             ) from err
 
-    def get_mjpeg_url(self, oid: int, quality: int = 100, size: str | None = None) -> str:
+    def get_mjpeg_url(self, oid: int) -> str:
         """Get the MJPEG stream URL for a camera."""
-        url = f"{self._host}/video.mjpg?oid={oid}&q={quality}"
-        if size:
-            url += f"&size={size}"
-        return url
+        return f"{self._host}/video.mjpg?oid={oid}&size=1920x1080&maintainAR=true&backColor=0,0,0"
 
     def get_recording_url(self, oid: int, ot: int, filename: str) -> str:
         """Get the direct URL to stream a recording."""
