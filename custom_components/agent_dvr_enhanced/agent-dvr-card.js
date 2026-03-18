@@ -278,7 +278,7 @@ class AgentDVRCard extends HTMLElement {
           border-bottom-color: var(--primary-color);
         }
         .tab svg { width: 18px; height: 18px; fill: currentColor; }
-        .content { min-height: 240px; position: relative; }
+        .content { position: relative; }
 
         /* Live */
         .live-container { position: relative; width: 100%; background: #000; }

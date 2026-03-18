@@ -296,8 +296,8 @@ class AgentDVRCardJsView(HomeAssistantView):
     async def get(self, request: web.Request) -> web.Response:
         """Serve the JS file."""
         try:
-            with open(self._js_path, encoding="utf-8") as fh:
-                content = fh.read()
+            hass = request.app["hass"]
+            content = await hass.async_add_executor_job(self._read_file)
             content_hash = hashlib.md5(content.encode()).hexdigest()[:8]
             return web.Response(
                 body=content,
@@ -310,3 +310,8 @@ class AgentDVRCardJsView(HomeAssistantView):
             )
         except FileNotFoundError:
             return web.Response(status=404, text="Card JS not found")
+
+    def _read_file(self) -> str:
+        """Read the JS file from disk (runs in executor)."""
+        with open(self._js_path, encoding="utf-8") as fh:
+            return fh.read()

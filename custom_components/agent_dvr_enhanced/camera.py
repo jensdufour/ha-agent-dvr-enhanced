@@ -139,8 +139,8 @@ class AgentDVRCamera(CoordinatorEntity[AgentDVRCoordinator], Camera):
                 await response.write(chunk)
         except ConnectionResetError:
             pass
-        finally:
-            return response
+
+        return response
 
     # ------------------------------------------------------------------
     # Helpers
