@@ -561,15 +561,18 @@ class AgentDVRCard extends HTMLElement {
         return div.innerHTML;
     }
 
-    _openFullscreen() {
-        const liveImg = this.shadowRoot.querySelector("#live-image");
-        if (!liveImg) return;
+    async _openFullscreen() {
+        if (!this._hass || !this._config) return;
 
         const overlay = document.createElement("div");
         overlay.className = "fullscreen-overlay";
 
+        // Use MJPEG stream for fullscreen - native resolution, no white padding
+        const streamPath = `/api/camera_proxy_stream/${this._config.camera_entity}`;
+        const signedUrl = await this._signUrl(streamPath);
+
         const img = document.createElement("img");
-        img.src = liveImg.src;
+        img.src = signedUrl;
         img.alt = "Live view";
 
         const closeBtn = document.createElement("button");
@@ -580,17 +583,9 @@ class AgentDVRCard extends HTMLElement {
         overlay.appendChild(closeBtn);
         this.shadowRoot.appendChild(overlay);
 
-        // Keep refreshing the fullscreen image
-        this._fullscreenInterval = setInterval(() => {
-            const srcImg = this.shadowRoot.querySelector("#live-image");
-            if (srcImg) img.src = srcImg.src;
-        }, 1000);
-
         const close = () => {
-            if (this._fullscreenInterval) {
-                clearInterval(this._fullscreenInterval);
-                this._fullscreenInterval = null;
-            }
+            // Stop the MJPEG stream by clearing the src
+            img.src = "";
             overlay.remove();
         };
 
@@ -600,10 +595,6 @@ class AgentDVRCard extends HTMLElement {
 
     disconnectedCallback() {
         this._stopLiveRefresh();
-        if (this._fullscreenInterval) {
-            clearInterval(this._fullscreenInterval);
-            this._fullscreenInterval = null;
-        }
     }
 
     getCardSize() {
