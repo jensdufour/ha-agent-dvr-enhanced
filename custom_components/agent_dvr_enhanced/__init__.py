@@ -12,7 +12,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
-from .api import AgentDVRApiClient
+from .api import AgentDVRApiClient, AgentDVRConnectionError
 from .const import DOMAIN
 from .coordinator import AgentDVRCoordinator
 
@@ -166,6 +166,9 @@ class AgentDVRThumbnailProxyView(HomeAssistantView):
 
         try:
             data = await coordinator.client.get_thumbnail(oid_int, filename)
+        except AgentDVRConnectionError:
+            _LOGGER.warning("Timeout fetching thumbnail %s", filename)
+            return web.Response(status=504, text="Timeout fetching thumbnail")
         except Exception:
             _LOGGER.exception("Error fetching thumbnail %s", filename)
             return web.Response(status=502, text="Error fetching thumbnail")

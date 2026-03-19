@@ -10,7 +10,7 @@ from homeassistant.helpers.update_coordinator import (
     UpdateFailed,
 )
 
-from .api import AgentDVRApiClient, AgentDVRApiError
+from .api import AgentDVRApiClient, AgentDVRApiError, AgentDVRConnectionError
 from .const import DOMAIN, MQTT_ROOT_TOPIC, SCAN_INTERVAL
 
 _LOGGER = logging.getLogger(__name__)
@@ -139,6 +139,11 @@ class AgentDVRCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         try:
             objects_data = await self.client.get_objects()
             status_data = await self.client.get_status()
+        except AgentDVRConnectionError as err:
+            _LOGGER.warning("AgentDVR connection issue: %s", err)
+            raise UpdateFailed(
+                f"Error communicating with AgentDVR: {err}"
+            ) from err
         except AgentDVRApiError as err:
             raise UpdateFailed(
                 f"Error communicating with AgentDVR: {err}"

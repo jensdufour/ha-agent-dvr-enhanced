@@ -9,6 +9,11 @@ import aiohttp
 
 _LOGGER = logging.getLogger(__name__)
 
+DEFAULT_JSON_TIMEOUT = 15
+DEFAULT_BYTES_TIMEOUT = 20
+MAX_RETRIES = 3
+RETRY_DELAY = 2
+
 
 class AgentDVRApiError(Exception):
     """Base exception for AgentDVR API errors."""
@@ -31,45 +36,65 @@ class AgentDVRApiClient:
         """Return the server base URL."""
         return self._host
 
-    async def _request_json(self, path: str, timeout: int = 10) -> Any:
-        """Perform a GET request and return JSON."""
+    async def _request_json(self, path: str, timeout: int = DEFAULT_JSON_TIMEOUT) -> Any:
+        """Perform a GET request and return JSON with retries."""
         url = f"{self._host}/{path}"
-        try:
-            async with asyncio.timeout(timeout):
-                resp = await self._session.get(url)
-                resp.raise_for_status()
-                text = await resp.text()
-                return json.loads(text)
-        except asyncio.TimeoutError as err:
-            raise AgentDVRConnectionError(
-                "Timeout connecting to AgentDVR"
-            ) from err
-        except json.JSONDecodeError as err:
-            _LOGGER.error("Invalid JSON from AgentDVR at %s: %s", url, err)
-            raise AgentDVRApiError(
-                f"Invalid JSON response from {url}"
-            ) from err
-        except (aiohttp.ClientError, aiohttp.ClientResponseError) as err:
-            raise AgentDVRConnectionError(
-                f"Error connecting to AgentDVR at {url}: {err}"
-            ) from err
+        last_err: Exception | None = None
+        for attempt in range(1, MAX_RETRIES + 1):
+            try:
+                async with asyncio.timeout(timeout):
+                    resp = await self._session.get(url)
+                    resp.raise_for_status()
+                    text = await resp.text()
+                    return json.loads(text)
+            except asyncio.TimeoutError as err:
+                last_err = err
+                _LOGGER.debug(
+                    "Timeout on attempt %d/%d for %s", attempt, MAX_RETRIES, url
+                )
+            except json.JSONDecodeError as err:
+                _LOGGER.error("Invalid JSON from AgentDVR at %s: %s", url, err)
+                raise AgentDVRApiError(
+                    f"Invalid JSON response from {url}"
+                ) from err
+            except (aiohttp.ClientError, aiohttp.ClientResponseError) as err:
+                last_err = err
+                _LOGGER.debug(
+                    "Connection error on attempt %d/%d for %s: %s",
+                    attempt, MAX_RETRIES, url, err,
+                )
+            if attempt < MAX_RETRIES:
+                await asyncio.sleep(RETRY_DELAY)
+        raise AgentDVRConnectionError(
+            f"Timeout connecting to AgentDVR after {MAX_RETRIES} attempts"
+        ) from last_err
 
-    async def _request_bytes(self, path: str, timeout: int = 10) -> bytes:
-        """Perform a GET request and return raw bytes."""
+    async def _request_bytes(self, path: str, timeout: int = DEFAULT_BYTES_TIMEOUT) -> bytes:
+        """Perform a GET request and return raw bytes with retries."""
         url = f"{self._host}/{path}"
-        try:
-            async with asyncio.timeout(timeout):
-                resp = await self._session.get(url)
-                resp.raise_for_status()
-                return await resp.read()
-        except asyncio.TimeoutError as err:
-            raise AgentDVRConnectionError(
-                "Timeout connecting to AgentDVR"
-            ) from err
-        except (aiohttp.ClientError, aiohttp.ClientResponseError) as err:
-            raise AgentDVRConnectionError(
-                "Error connecting to AgentDVR"
-            ) from err
+        last_err: Exception | None = None
+        for attempt in range(1, MAX_RETRIES + 1):
+            try:
+                async with asyncio.timeout(timeout):
+                    resp = await self._session.get(url)
+                    resp.raise_for_status()
+                    return await resp.read()
+            except asyncio.TimeoutError as err:
+                last_err = err
+                _LOGGER.debug(
+                    "Timeout on attempt %d/%d for %s", attempt, MAX_RETRIES, url
+                )
+            except (aiohttp.ClientError, aiohttp.ClientResponseError) as err:
+                last_err = err
+                _LOGGER.debug(
+                    "Connection error on attempt %d/%d for %s: %s",
+                    attempt, MAX_RETRIES, url, err,
+                )
+            if attempt < MAX_RETRIES:
+                await asyncio.sleep(RETRY_DELAY)
+        raise AgentDVRConnectionError(
+            f"Timeout connecting to AgentDVR after {MAX_RETRIES} attempts"
+        ) from last_err
 
     async def get_status(self) -> dict[str, Any]:
         """Get server status."""
