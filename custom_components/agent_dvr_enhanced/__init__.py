@@ -15,6 +15,7 @@ from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from .api import AgentDVRApiClient, AgentDVRConnectionError
 from .const import DOMAIN
 from .coordinator import AgentDVRCoordinator
+from .media_token import MediaTokenStore
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -35,6 +36,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     # Set up MQTT subscriptions for instant event detection
     await coordinator.setup_mqtt()
+
+    # Create a shared media token store for Companion App playback
+    if f"{DOMAIN}_media_tokens" not in hass.data:
+        hass.data[f"{DOMAIN}_media_tokens"] = MediaTokenStore()
 
     # Register HTTP proxy views once
     try:
@@ -67,13 +72,23 @@ class AgentDVRRecordingProxyView(HomeAssistantView):
 
     url = "/api/agent_dvr_enhanced/recording/{entry_id}/{oid}/{ot}/{filename:.+}"
     name = "api:agent_dvr_enhanced:recording"
-    requires_auth = True
+    requires_auth = False
 
     async def get(
         self, request: web.Request, entry_id: str, oid: str, ot: str, filename: str
     ) -> web.Response:
         """Serve a recording from AgentDVR with Range request support."""
         hass = request.app["hass"]
+
+        # Allow standard HA auth OR a valid media token
+        if not request.get("hass_user"):
+            token = request.query.get("media_token")
+            store: MediaTokenStore | None = hass.data.get(f"{DOMAIN}_media_tokens")
+            if not token or not store or not store.validate(
+                token,
+                f"/api/agent_dvr_enhanced/recording/{entry_id}/{oid}/{ot}/",
+            ):
+                return web.Response(status=401, text="Unauthorized")
 
         if DOMAIN not in hass.data or entry_id not in hass.data[DOMAIN]:
             return web.Response(status=404, text="Integration not found")
@@ -143,13 +158,23 @@ class AgentDVRThumbnailProxyView(HomeAssistantView):
 
     url = "/api/agent_dvr_enhanced/thumbnail/{entry_id}/{oid}/{filename:.+}"
     name = "api:agent_dvr_enhanced:thumbnail"
-    requires_auth = True
+    requires_auth = False
 
     async def get(
         self, request: web.Request, entry_id: str, oid: str, filename: str
     ) -> web.Response:
         """Serve a thumbnail from AgentDVR."""
         hass = request.app["hass"]
+
+        # Allow standard HA auth OR a valid media token
+        if not request.get("hass_user"):
+            token = request.query.get("media_token")
+            store: MediaTokenStore | None = hass.data.get(f"{DOMAIN}_media_tokens")
+            if not token or not store or not store.validate(
+                token,
+                f"/api/agent_dvr_enhanced/thumbnail/{entry_id}/{oid}/",
+            ):
+                return web.Response(status=401, text="Unauthorized")
 
         if DOMAIN not in hass.data or entry_id not in hass.data[DOMAIN]:
             return web.Response(status=404, text="Integration not found")

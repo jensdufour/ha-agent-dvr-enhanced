@@ -18,6 +18,7 @@ from homeassistant.core import HomeAssistant
 
 from .const import DOMAIN, OBJECT_TYPE_CAMERA
 from .coordinator import AgentDVRCoordinator
+from .media_token import MediaTokenStore
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -55,8 +56,17 @@ class AgentDVRMediaSource(MediaSource):
         if entry_id not in self.hass.data.get(DOMAIN, {}):
             raise Unresolvable(f"Config entry not loaded: {entry_id}")
 
+        # Generate a media token so the Companion App's native player can
+        # fetch the recording without a full HA auth session.
+        path_prefix = (
+            f"/api/agent_dvr_enhanced/recording/{entry_id}/{oid}/{ot}/"
+        )
+        store: MediaTokenStore = self.hass.data[f"{DOMAIN}_media_tokens"]
+        token = store.create(path_prefix)
+
         url = (
             f"/api/agent_dvr_enhanced/recording/{entry_id}/{oid}/{ot}/{filename}"
+            f"?media_token={token}"
         )
 
         mime_type = "video/mp4"
